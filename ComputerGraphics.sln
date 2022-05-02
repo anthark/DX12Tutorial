@@ -31,6 +31,11 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "freetype", "thirdparty\free
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "imgui", "thirdparty\imgui\imgui.vcxproj", "{D29D006A-1FC8-4000-944C-4699CD6F5107}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "3.Triangle", "3.Triangle\3.Triangle.vcxproj", "{EDB55556-89B8-4C6B-8829-9580E61232F9}"
+	ProjectSection(ProjectDependencies) = postProject
+		{6C9F4FA4-801C-4DA0-989E-A0CD0188CF63} = {6C9F4FA4-801C-4DA0-989E-A0CD0188CF63}
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -95,6 +100,14 @@ Global
 		{D29D006A-1FC8-4000-944C-4699CD6F5107}.Release|x64.Build.0 = Release|x64
 		{D29D006A-1FC8-4000-944C-4699CD6F5107}.Ship|x64.ActiveCfg = Ship|x64
 		{D29D006A-1FC8-4000-944C-4699CD6F5107}.Ship|x64.Build.0 = Ship|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Debug|x64.ActiveCfg = Debug|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Debug|x64.Build.0 = Debug|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Profile|x64.ActiveCfg = Profile|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Profile|x64.Build.0 = Profile|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Release|x64.ActiveCfg = Release|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Release|x64.Build.0 = Release|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Ship|x64.ActiveCfg = Ship|x64
+		{EDB55556-89B8-4C6B-8829-9580E61232F9}.Ship|x64.Build.0 = Ship|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
