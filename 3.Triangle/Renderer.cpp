@@ -52,7 +52,7 @@ bool Renderer::Init(Platform::Device* pDevice)
     }
     if (res)
     {
-        res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Buffer({ sizeof(vertices) }), D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER, nullptr, m_vertexBuffer, vertices, sizeof(vertices));
+        res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Buffer({ sizeof(vertices) }), D3D12_RESOURCE_STATE_COMMON, nullptr, m_vertexBuffer, vertices, sizeof(vertices));
     }
     if (res)
     {
@@ -63,7 +63,7 @@ bool Renderer::Init(Platform::Device* pDevice)
     // Create index buffer
     if (res)
     {
-        res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Buffer({ sizeof(indices) }), D3D12_RESOURCE_STATE_INDEX_BUFFER, nullptr, m_indexBuffer, indices, sizeof(indices));
+        res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Buffer({ sizeof(indices) }), D3D12_RESOURCE_STATE_COMMON, nullptr, m_indexBuffer, indices, sizeof(indices));
     }
     if (res)
     {
