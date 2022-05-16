@@ -1,0 +1,11 @@
+Model Information:
+* title:	Guard Tower
+* source:	https://sketchfab.com/3d-models/guard-tower-c6c0ed9afcdb48f39b23ae60e6249e1a
+* author:	slobang (https://sketchfab.com/slobang)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Guard Tower" (https://sketchfab.com/3d-models/guard-tower-c6c0ed9afcdb48f39b23ae60e6249e1a) by slobang (https://sketchfab.com/slobang) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
