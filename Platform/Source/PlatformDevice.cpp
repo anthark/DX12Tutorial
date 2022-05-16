@@ -172,7 +172,8 @@ struct HeapRingBuffer : public RingBuffer<HeapRingBuffer, UINT8*>
                 break;
         }
 
-        D3D_CHECK(pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &CD3DX12_RESOURCE_DESC::Buffer({ heapSize }), state, nullptr, __uuidof(ID3D12Resource), (void**)&pDataBuffer));
+        const auto& desc = CD3DX12_RESOURCE_DESC::Buffer({ heapSize });
+        D3D_CHECK(pDevice->CreateCommittedResource(&heapProps, D3D12_HEAP_FLAG_NONE, &desc, state, nullptr, __uuidof(ID3D12Resource), (void**)&pDataBuffer));
 
         D3D12_RANGE range = {};
         range.Begin = 0;
@@ -237,7 +238,8 @@ struct QueryRingBuffer : public RingBuffer<QueryRingBuffer, std::function<void(U
             allocDesc.ExtraHeapFlags = D3D12_HEAP_FLAG_NONE;
             allocDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
-            D3D_CHECK(pMemAllocator->CreateResource(&allocDesc, &CD3DX12_RESOURCE_DESC::Buffer(heapSize * sizeof(UINT64)), D3D12_RESOURCE_STATE_COPY_DEST, nullptr, &cpuBuffer.pAllocation, __uuidof(ID3D12Resource), (void**)&cpuBuffer.pResource));
+            const auto& desc = CD3DX12_RESOURCE_DESC::Buffer(heapSize * sizeof(UINT64));
+            D3D_CHECK(pMemAllocator->CreateResource(&allocDesc, &desc, D3D12_RESOURCE_STATE_COPY_DEST, nullptr, &cpuBuffer.pAllocation, __uuidof(ID3D12Resource), (void**)&cpuBuffer.pResource));
         }
 
         if (SUCCEEDED(hr))
@@ -759,10 +761,12 @@ HRESULT Device::UpdateTexture(ID3D12GraphicsCommandList* pCommandList, ID3D12Res
 
         placedFootprint[i].Offset += allocStartOffset;
 
+        const auto& dst = CD3DX12_TEXTURE_COPY_LOCATION(pTexture, i);
+        const auto& src = CD3DX12_TEXTURE_COPY_LOCATION(m_pUploadBuffer->GetBuffer(), placedFootprint[i]);
         pCommandList->CopyTextureRegion(
-            &CD3DX12_TEXTURE_COPY_LOCATION(pTexture, i),
+            &dst,
             0, 0, 0,
-            &CD3DX12_TEXTURE_COPY_LOCATION(m_pUploadBuffer->GetBuffer(), placedFootprint[i]),
+            &src,
             nullptr);
 
         width /= 2;
