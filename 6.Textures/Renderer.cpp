@@ -476,7 +476,7 @@ bool Renderer::CreateGeometry(const CreateGeometryParams& params, Geometry& geom
                 texDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
                 texDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
                 texDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-                texDesc.Texture2D.MipLevels = 1;
+                texDesc.Texture2D.MipLevels = params.geomStaticTextures[i]->GetDesc().MipLevels;
                 GetDevice()->GetDXDevice()->CreateShaderResourceView(params.geomStaticTextures[i], &texDesc, cpuTextureHandle);
 
                 cpuTextureHandle.ptr += GetDevice()->GetDXDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
