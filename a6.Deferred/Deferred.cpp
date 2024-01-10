@@ -19,10 +19,13 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     Platform::RenderWindow* pWindow = new Platform::RenderWindow(pRenderer, pRenderer);
     if (pWindow->Create({ _T("Deferred"), 1920, 1080, true, false }, hInstance))
     {
+        // We use more memory for dynamic buffers here, as vsync is turned off for this sample to compare GPU performance
+        // Hence it can be a lot of frames generated on CPU and once GPU is delayed a little bit, when switching to/from full screen mode, it can lead to lack of dynamic memory
+        // Looks like 64 is enough for Nvidia RTX 2070 and 4k monitor, but I reserve 128 just in case
 #ifdef _DEBUG
-        Platform::DeviceCreateParams params{ true, true, 3, 2, pWindow->GetHWND(), 512, 32 };
+        Platform::DeviceCreateParams params{ true, true, 3, 2, pWindow->GetHWND(), 512, 128 };
 #else
-        Platform::DeviceCreateParams params{ false, false, 3, 2, pWindow->GetHWND(), 512, 32 };
+        Platform::DeviceCreateParams params{ false, false, 3, 2, pWindow->GetHWND(), 512, 128 };
 #endif
         if (pDevice->Create(params))
         {
