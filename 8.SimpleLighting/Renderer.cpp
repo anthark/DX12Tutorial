@@ -277,6 +277,16 @@ bool Renderer::Render()
     return false;
 }
 
+bool Renderer::Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect)
+{
+    bool res = BaseRenderer::Resize(viewport, rect);
+    if (res)
+    {
+        m_pTextDraw->Resize(GetRect());
+    }
+    return res;
+}
+
 void Renderer::SetupLights(Lights* pLights)
 {
     pLights->ambientColor = Point3f{ 0.1f, 0.1f, 0.1f };

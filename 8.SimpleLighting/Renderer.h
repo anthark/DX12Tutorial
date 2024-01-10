@@ -19,6 +19,9 @@ public:
     virtual bool Update(double elapsedSec, double deltaSec) override;
     virtual bool Render() override;
 
+protected:
+    virtual bool Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect) override;
+
 private:
 
     struct Geometry : BaseRenderer::Geometry

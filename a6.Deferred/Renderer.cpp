@@ -1492,8 +1492,6 @@ bool Renderer::Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect)
 
     if (res)
     {
-        m_pTextDraw->Resize(rect);
-
         DestroyLightgrid();
         DestroyDeferredTextures();
         DestroyHDRTexture();
@@ -1505,6 +1503,10 @@ bool Renderer::Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect)
         if (res)
         {
             res = CreateLightgrid();
+        }
+        if (res)
+        {
+            m_pTextDraw->Resize(rect);
         }
     }
 

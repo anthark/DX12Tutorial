@@ -795,7 +795,10 @@ bool Renderer::Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect)
         DestroyHDRTexture();
         res = CreateHDRTexture();
 
-        m_pTextDraw->Resize(rect);
+        if (res)
+        {
+            m_pTextDraw->Resize(rect);
+        }
     }
 
     return res;
