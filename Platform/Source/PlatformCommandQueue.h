@@ -61,7 +61,7 @@ protected:
 private:
     ID3D12CommandQueue* m_pQueue = nullptr;
 
-    UINT64 m_currentFenceValue = NoneValue;
+    UINT64 m_currentFenceValue = 0;
 
     int m_curCmdList = -1;
     std::vector<CommandList*> m_cmdLists;

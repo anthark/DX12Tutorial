@@ -14,7 +14,7 @@ bool CommandList::Init(ID3D12Device* pDevice, const D3D12_COMMAND_LIST_TYPE& typ
     D3D_CHECK(m_pCommandListForSubmit->QueryInterface(__uuidof(ID3D12GraphicsCommandList), (void**)&m_pCommandList));
     D3D_CHECK(m_pCommandList->Close());
     D3D_CHECK(m_pCommandAllocator->Reset());
-    D3D_CHECK(pDevice->CreateFence(NoneValue, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), (void**)&m_pFence));
+    D3D_CHECK(pDevice->CreateFence(0, D3D12_FENCE_FLAG_NONE, __uuidof(ID3D12Fence), (void**)&m_pFence));
     if (SUCCEEDED(hr))
     {
         m_hEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -142,32 +142,6 @@ bool CommandQueue::Init(ID3D12Device* pDevice, const D3D12_COMMAND_LIST_TYPE& ty
     if (res)
     {
         m_currentFenceValue = 1;
-    }
-
-    // Warm-up fences
-    if (res)
-    {
-        HRESULT hr = S_OK;
-        for (int i = 0; i < cmdListCount && SUCCEEDED(hr); i++)
-        {
-            ID3D12Fence* pFence = m_cmdLists[i]->GetFence();
-            D3D_CHECK(m_pQueue->Signal(pFence, m_currentFenceValue + i));
-        }
-
-        for (int i = 0; i < cmdListCount && SUCCEEDED(hr); i++)
-        {
-            ID3D12Fence* pFence = m_cmdLists[i]->GetFence();
-            HANDLE hEvent = m_cmdLists[i]->GetEvent();
-
-            if (pFence->GetCompletedValue() == NoneValue || pFence->GetCompletedValue() < m_currentFenceValue)
-            {
-                D3D_CHECK(pFence->SetEventOnCompletion(m_currentFenceValue, hEvent));
-                hr = WaitForSingleObject(hEvent, INFINITE) == WAIT_OBJECT_0 ? S_OK : E_FAIL;
-                assert(SUCCEEDED(hr));
-            }
-
-            ++m_currentFenceValue;
-        }
     }
 
     if (!res)
