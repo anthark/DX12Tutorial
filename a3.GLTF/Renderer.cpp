@@ -124,17 +124,10 @@ Renderer::Renderer(Platform::Device* pDevice)
 {
     m_color[0] = m_color[1] = m_color[2] = 1.0f;
 
-    // Models for loading should be placed in a folder named "Models", that
-    // is placed on the same level as solution's folder
+    // Models for loading should be placed in a folder named "Common/Models" in solution folder
 
-    //m_modelsToLoad.push(L"Donnager");
     m_modelsToLoad.push(L"Porsche930");
     //m_modelsToLoad.push(L"LightSaber");
-    //m_modelsToLoad.push(L"AK");
-    //m_modelsToLoad.push(L"Crypt");
-    //m_modelsToLoad.push(L"Zhuk");
-    //m_modelsToLoad.push(L"artorias");
-    //m_modelsToLoad.push(L"Mechdrone");
 }
 
 Renderer::~Renderer()
@@ -1851,7 +1844,7 @@ bool Renderer::LoadModel(const std::wstring& name, tinygltf::Model** ppModel)
     std::string warn;
 
     char buffer[MAX_PATH + 1];
-    sprintf(buffer, "../../Models/%ls/scene.gltf", name.c_str());
+    sprintf(buffer, "../Common/Models/%ls/scene.gltf", name.c_str());
 
     bool ret = loader.LoadASCIIFromFile(*ppModel, &err, &warn, buffer);
 
