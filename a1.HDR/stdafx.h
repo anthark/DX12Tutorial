@@ -4,6 +4,7 @@
 #define NOMINMAX
 // Windows Header Files
 #include <windows.h>
+#include <ShellScalingApi.h>
 
 #include <tchar.h>
 #include <comdef.h>

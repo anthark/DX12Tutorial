@@ -69,6 +69,7 @@
     <Import Project="..\Props\stb.props" />
     <Import Project="..\Props\tinygltf.props" />
     <Import Project="..\Props\Markers.props" />
+    <Import Project="..\Props\Shell.props" />
   </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -80,6 +81,7 @@
     <Import Project="..\Props\stb.props" />
     <Import Project="..\Props\tinygltf.props" />
     <Import Project="..\Props\Markers.props" />
+    <Import Project="..\Props\Shell.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Ship|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -88,6 +90,7 @@
     <Import Project="..\Props\PNG.props" />
     <Import Project="..\Props\freetype.props" />
     <Import Project="..\Props\imgui.props" />
+    <Import Project="..\Props\Shell.props" />
   </ImportGroup>
   <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Profile|x64'" Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
@@ -96,6 +99,7 @@
     <Import Project="..\Props\PNG.props" />
     <Import Project="..\Props\freetype.props" />
     <Import Project="..\Props\imgui.props" />
+    <Import Project="..\Props\Shell.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">

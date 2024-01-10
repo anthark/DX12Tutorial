@@ -50,6 +50,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
                      _In_ LPWSTR    lpCmdLine,
                      _In_ int       nCmdShow)
 {
+    SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+
     int exitCode = -1;
 
     Platform::Device* pDevice = new Platform::Device();
