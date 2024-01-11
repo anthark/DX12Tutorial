@@ -381,6 +381,11 @@ bool Renderer::Render()
                     m_pTextDraw->DrawText(m_fontId, Point3f{ 1,1,1 }, _T("5 - Uncharted2 with sRGB + eye adaptation"));
                     break;
             }
+            // Show current values for debug purposes
+            /*m_pTextDraw->DrawText(m_fontId, Point3f{ 1,1,1 }, _T("Luminance: %7.5f"), m_tonemapValues.luminance);
+            m_pTextDraw->DrawText(m_fontId, Point3f{ 1,1,1 }, _T("Exposure: %7.5f"), m_tonemapValues.exposure);
+            m_pTextDraw->DrawText(m_fontId, Point3f{ 1,1,1 }, _T("Luminance (adapted): %7.5f"), m_tonemapValues.luminanceAdapted);
+            m_pTextDraw->DrawText(m_fontId, Point3f{ 1,1,1 }, _T("Exposure (adapted): %7.5f"), m_tonemapValues.exposureAdapted);*/
         }
 
         EndRender();
@@ -579,7 +584,26 @@ void Renderer::MeasureLuminance()
 
         GetCurrentCommandList()->Dispatch(1, 1, 1);
 
-        GetDevice()->TransitResourceState(GetCurrentCommandList(), m_tonemapParams.pResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+        // Read values back to CPU for debug purposes
+        UINT64 offset = 0;
+        ID3D12Resource* pReadbackBuffer = nullptr;
+        void* pData = nullptr;
+        if (GetDevice()->AllocateReadbackBuffer(sizeof(TonemapParams), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, &pData, &pReadbackBuffer, offset))
+        {
+            GetDevice()->TransitResourceState(GetCurrentCommandList(), m_tonemapParams.pResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_COPY_SOURCE);
+            GetCurrentCommandList()->CopyBufferRegion(
+                pReadbackBuffer, offset,
+                m_tonemapParams.pResource, 0, sizeof(TonemapParams)
+            );
+            GetDevice()->TransitResourceState(GetCurrentCommandList(), m_tonemapParams.pResource, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+            GetDevice()->AddGPUFrameCB([this, pData]()
+                {
+                    m_tonemapValues = *reinterpret_cast<const TonemapParams*>(pData);
+
+                    return true;
+                }
+            );
+        }
     }
 }
 

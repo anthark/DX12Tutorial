@@ -104,6 +104,16 @@ HRESULT CommandList::Wait(UINT64& finishedFenceValue)
         }
         finishedFenceValue = m_submittedFenceValue;
         m_submittedFenceValue = NoneValue;
+        for (int i = 0; i < m_cb.size(); i++)
+        {
+            bool cbRes = m_cb[i]();
+            assert(cbRes);
+            if (!cbRes)
+            {
+                hr = E_FAIL;
+                break;
+            }
+        }
     }
     return hr;
 }
@@ -191,7 +201,7 @@ HRESULT CommandQueue::OpenCommandList(ID3D12GraphicsCommandList** ppList, UINT64
     return hr;
 }
 
-HRESULT CommandQueue::CloseAndSubmitCommandList(UINT64* pSubmitFenceValue)
+HRESULT CommandQueue::CloseAndSubmitCommandList(UINT64* pSubmitFenceValue, const std::vector<std::function<bool()>>& cb)
 {
     if (pSubmitFenceValue != nullptr)
     {
@@ -203,7 +213,7 @@ HRESULT CommandQueue::CloseAndSubmitCommandList(UINT64* pSubmitFenceValue)
     HRESULT hr = CloseCommandList();
     if (SUCCEEDED(hr))
     {
-        hr = SubmitCommandList(pSubmitFenceValue);
+        hr = SubmitCommandList(pSubmitFenceValue, cb);
     }
 
     return hr;
@@ -219,7 +229,7 @@ HRESULT CommandQueue::CloseCommandList()
     return hr;
 }
 
-HRESULT CommandQueue::SubmitCommandList(UINT64* pSubmitFenceValue)
+HRESULT CommandQueue::SubmitCommandList(UINT64* pSubmitFenceValue, const std::vector<std::function<bool()>>& cb)
 {
     if (pSubmitFenceValue != nullptr)
     {
@@ -244,6 +254,8 @@ HRESULT CommandQueue::SubmitCommandList(UINT64* pSubmitFenceValue)
 
     if (SUCCEEDED(hr))
     {
+        pCmdList->SetGPUFrameCB(cb);
+
         if (pSubmitFenceValue != nullptr)
         {
             *pSubmitFenceValue = pCmdList->GetSubmittedFenceValue();

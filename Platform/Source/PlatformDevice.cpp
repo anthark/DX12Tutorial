@@ -582,6 +582,7 @@ bool Device::BeginRenderCommandList(ID3D12GraphicsCommandList** ppCommandList, I
     HRESULT hr = m_pPresentQueue->OpenCommandList(ppCommandList, finishedFenceValue);
     if (finishedFenceValue != NoneValue)
     {
+        m_pReadbackBuffer->FlashFenceValue(finishedFenceValue);
         m_pDynamicBuffer->FlashFenceValue(finishedFenceValue);
         m_pDynamicDescBuffer->FlashFenceValue(finishedFenceValue);
         m_pQueryBuffer->FlashFenceValue(finishedFenceValue);
@@ -641,9 +642,10 @@ bool Device::CloseSubmitAndPresentRenderCommandList(bool vsync)
     D3D_CHECK(m_pQueryBuffer->Resolve(m_pPresentQueue->GetCurrentCommandList()->GetGraphicsCommandList()));
 
     UINT64 presentFenceValue = NoneValue;
-    D3D_CHECK(m_pPresentQueue->CloseAndSubmitCommandList(&presentFenceValue));
+    D3D_CHECK(m_pPresentQueue->CloseAndSubmitCommandList(&presentFenceValue, m_gpuFrameCB));
     if (SUCCEEDED(hr))
     {
+        m_pReadbackBuffer->AddPendingFence(presentFenceValue);
         m_pDynamicBuffer->AddPendingFence(presentFenceValue);
         m_pDynamicDescBuffer->AddPendingFence(presentFenceValue);
         m_pQueryBuffer->AddPendingFence(presentFenceValue);
@@ -1022,6 +1024,20 @@ bool Device::AllocateDynamicBuffer(UINT size, UINT alignment, void** ppCPUData, 
     if (res == RingBufferResult::Ok)
     {
         gpuVirtualAddress = m_pDynamicBuffer->GetBuffer()->GetGPUVirtualAddress() + allocStartOffset;
+    }
+
+    return res == RingBufferResult::Ok;
+}
+
+bool Device::AllocateReadbackBuffer(UINT size, UINT alignment, void** ppCPUData, ID3D12Resource** ppReadBackBuffer, UINT64& offset)
+{
+    UINT alignedSize = Align(size, (UINT)alignment);
+    UINT64 allocStartOfset = 0;
+    RingBufferResult res = m_pReadbackBuffer->Alloc(alignedSize, allocStartOfset, *((UINT8**)ppCPUData), alignment);
+    if (res == RingBufferResult::Ok)
+    {
+        offset = allocStartOfset;
+        *ppReadBackBuffer = m_pReadbackBuffer->GetBuffer();
     }
 
     return res == RingBufferResult::Ok;
@@ -1427,6 +1443,7 @@ void Device::WaitGPUIdle()
     m_pPresentQueue->WaitIdle(finishedFenceValue);
     if (finishedFenceValue != NoneValue)
     {
+        m_pReadbackBuffer->FlashFenceValue(finishedFenceValue);
         m_pDynamicBuffer->FlashFenceValue(finishedFenceValue);
         m_pDynamicDescBuffer->FlashFenceValue(finishedFenceValue);
     }

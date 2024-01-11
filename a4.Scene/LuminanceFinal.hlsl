@@ -38,6 +38,6 @@ void CS()
     output[0].luminanceAdapted = averageLuminanceAdapted;
     output[0].keyValue = keyValue;
     output[0].exposure = keyValue / averageLuminance;
-    output[0].exposureAdapted = keyValue / averageLuminanceAdapted;
+    output[0].exposureAdapted = keyValueAdapted / averageLuminanceAdapted;
     output[0].maxValue = maxValue;
 }

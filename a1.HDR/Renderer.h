@@ -7,6 +7,8 @@
 
 #include "Object.h"
 
+#include "Tonemap.h"
+
 struct Lights;
 
 class Renderer : public Platform::BaseRenderer, public Platform::CameraControlEuler
@@ -88,4 +90,6 @@ private:
 
     Platform::TextDraw* m_pTextDraw;
     Platform::TextDraw::FontId m_fontId;
+
+    TonemapParams m_tonemapValues;
 };

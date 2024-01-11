@@ -128,6 +128,7 @@ public:
     bool AllocateDynamicBuffers(UINT count, const UINT* pSizes, D3D12_GPU_DESCRIPTOR_HANDLE& startHandle, UINT8** ppCPUData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pDescs = nullptr);
     bool AllocateDynamicBuffers(UINT count, const UINT* pSizes, D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle, UINT8** ppCPUData, D3D12_CONSTANT_BUFFER_VIEW_DESC* pDescs = nullptr);
     bool AllocateDynamicBuffer(UINT size, UINT alignment, void** ppCPUData, UINT64& gpuVirtualAddress);
+    bool AllocateReadbackBuffer(UINT size, UINT alignment, void** ppCPUData, ID3D12Resource** ppReadBackBuffer, UINT64& offset);
     bool AllocateStaticDescriptors(UINT count, D3D12_CPU_DESCRIPTOR_HANDLE& cpuStartHandle, D3D12_GPU_DESCRIPTOR_HANDLE& gpuStartHandle);
     bool AllocateDynamicDescriptors(UINT count, D3D12_CPU_DESCRIPTOR_HANDLE& cpuStartHandle, D3D12_GPU_DESCRIPTOR_HANDLE& gpuStartHandle);
     ID3D12DescriptorHeap* GetDescriptorHeap() const;
@@ -149,6 +150,8 @@ public:
 
     bool QueryTimestamp(ID3D12GraphicsCommandList* pCommandList, const std::function<void(UINT64)>& cb);
     UINT64 GetPresentQueueFrequency() const;
+
+    void AddGPUFrameCB(const std::function<bool()>& function) { m_gpuFrameCB.push_back(function); }
 
 private:
 
@@ -253,6 +256,8 @@ private:
     UINT m_staticDescCount;
     UINT m_currentStaticDescIndex;
     // <--
+
+    std::vector<std::function<bool()>> m_gpuFrameCB;
 };
 
 } // Platform

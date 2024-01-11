@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 namespace Platform
 {
 
@@ -23,6 +25,8 @@ public:
     inline UINT64 GetSubmittedFenceValue() const { return m_submittedFenceValue; }
     inline UINT64 GetPendingFenceValue() const { return m_pendingFenceValue; }
 
+    void SetGPUFrameCB(const std::vector<std::function<bool()>>& cb) { m_cb = cb; }
+
 private:
     UINT64 m_currentFenceValue = NoneValue;
     UINT64 m_pendingFenceValue = NoneValue;
@@ -34,6 +38,8 @@ private:
 
     ID3D12Fence* m_pFence = nullptr;
     HANDLE m_hEvent = INVALID_HANDLE_VALUE;
+
+    std::vector<std::function<bool()>> m_cb;
 };
 
 class CommandQueue
@@ -45,9 +51,9 @@ public:
     void Term();
 
     HRESULT OpenCommandList(ID3D12GraphicsCommandList** ppList, UINT64& finishedFenceValue);
-    HRESULT CloseAndSubmitCommandList(UINT64* pSubmitFenceValue = nullptr);
+    HRESULT CloseAndSubmitCommandList(UINT64* pSubmitFenceValue = nullptr, const std::vector<std::function<bool()>>& cb = {});
     HRESULT CloseCommandList();
-    HRESULT SubmitCommandList(UINT64* pSubmitFenceValue = nullptr);
+    HRESULT SubmitCommandList(UINT64* pSubmitFenceValue = nullptr, const std::vector<std::function<bool()>>& cb = {});
 
     void WaitIdle(UINT64& finishedFenceValue);
 
