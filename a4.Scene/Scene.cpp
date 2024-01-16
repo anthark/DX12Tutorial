@@ -20,9 +20,9 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     if (pWindow->Create({ _T("Scene"), 1920, 1080, true, false }, hInstance))
     {
 #ifdef _DEBUG
-        Platform::DeviceCreateParams params{ true, true, 3, 2, pWindow->GetHWND(), 512, 32 };
+        Platform::DeviceCreateParams params{ true, true, 3, 2, pWindow->GetHWND(), 512, 128 };
 #else
-        Platform::DeviceCreateParams params{ false, false, 3, 2, pWindow->GetHWND(), 512, 32 };
+        Platform::DeviceCreateParams params{ false, false, 3, 2, pWindow->GetHWND(), 512, 128 };
 #endif
         if (pDevice->Create(params))
         {

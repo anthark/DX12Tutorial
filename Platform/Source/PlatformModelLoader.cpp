@@ -96,17 +96,7 @@ void GLTFModel::UpdateNodeMatrices(int nodeIdx, const Matrix4f& parent)
     Matrix4f fullMatrix = nodeInvBindMatrices[nodeIdx] * m;
 
     objData.nodeTransforms[nodeIdx] = fullMatrix;
-
-    if (flipFaces)
-    {
-        Matrix4f normalFlip;
-        normalFlip.Scale(-1, -1, -1);
-        objData.nodeNormalTransforms[nodeIdx] = normalFlip * fullMatrix.Inverse().Transpose();
-    }
-    else
-    {
-        objData.nodeNormalTransforms[nodeIdx] = fullMatrix.Inverse().Transpose();
-    }
+    objData.nodeNormalTransforms[nodeIdx] = fullMatrix.Inverse().Transpose();
 
     for (auto idx : node.children)
     {
@@ -124,8 +114,6 @@ void ModelLoader::ModelLoadState::ClearState()
     modelTextures.clear();
     modelSRGB.clear();
 
-    flipFaces = true;
-    flipFaces = false;
     autoscale = true;
     scaleValue = 1.0f;
 }
@@ -251,6 +239,8 @@ void GLTFModelInstance::UpdateMatrices()
     m.Identity();
     m.m[0] = -m.m[0];
 
+    Matrix4f normM = m; // Let's don't use overall model scaling and offset for normals
+
     Matrix4f scale;
     scale.Scale(pModel->scaleValue, pModel->scaleValue, pModel->scaleValue);
 
@@ -261,11 +251,11 @@ void GLTFModelInstance::UpdateMatrices()
 
     if (!pModel->nodes.empty())
     {
-        UpdateNodeMatrices(pModel->rootNodeIdx, m);
+        UpdateNodeMatrices(pModel->rootNodeIdx, m, normM);
     }
 }
 
-void GLTFModelInstance::UpdateNodeMatrices(int nodeIdx, const Matrix4f& parent)
+void GLTFModelInstance::UpdateNodeMatrices(int nodeIdx, const Matrix4f& parent, const Matrix4f& parentNormals)
 {
     const GLTFModel::Node& node = nodes[nodeIdx];
 
@@ -288,26 +278,18 @@ void GLTFModelInstance::UpdateNodeMatrices(int nodeIdx, const Matrix4f& parent)
         m = scaleMatrix * rotationMatrix * translationMatrix;
     }
 
+    Matrix4f normM = m * parentNormals;
+
     m = m * parent;
 
     Matrix4f fullMatrix = pModel->nodeInvBindMatrices[nodeIdx] * m;
 
     instObjData.nodeTransforms[nodeIdx] = fullMatrix;
-
-    if (pModel->flipFaces)
-    {
-        Matrix4f normalFlip;
-        normalFlip.Scale(-1, -1, -1);
-        instObjData.nodeNormalTransforms[nodeIdx] = normalFlip * fullMatrix.Inverse().Transpose();
-    }
-    else
-    {
-        instObjData.nodeNormalTransforms[nodeIdx] = fullMatrix.Inverse().Transpose();
-    }
+    instObjData.nodeNormalTransforms[nodeIdx] = (pModel->nodeInvBindMatrices[nodeIdx] * normM).Inverse().Transpose();
 
     for (auto idx : node.children)
     {
-        UpdateNodeMatrices(idx, m);
+        UpdateNodeMatrices(idx, m, normM);
     }
 }
 
@@ -456,8 +438,6 @@ bool ModelLoader::ProcessModelLoad()
                 m_modelLoadState.pGLTFModel->rootNodeIdx = m_modelLoadState.pModel->scenes[0].nodes[0];
                 m_modelLoadState.pGLTFModel->nodeInvBindMatrices.resize(m_modelLoadState.pGLTFModel->nodes.size());
 
-                m_modelLoadState.pGLTFModel->flipFaces = m_modelLoadState.flipFaces;
-
                 assert(m_modelLoadState.pGLTFModel->nodes.size() <= MAX_NODES);
                 m_modelLoadState.pGLTFModel->UpdateMatrices();
 
@@ -528,12 +508,6 @@ bool ModelLoader::LoadModel(const std::tstring& name, tinygltf::Model** ppModel)
 
     if (ret && (*ppModel)->asset.extras.IsObject())
     {
-        const tinygltf::Value& flipValue = (*ppModel)->asset.extras.Get("flip faces");
-        if (flipValue.IsBool())
-        {
-            m_modelLoadState.flipFaces = flipValue.Get<bool>();
-        }
-
         const tinygltf::Value& scaleFlag = (*ppModel)->asset.extras.Get("autoscale");
         if (scaleFlag.IsBool())
         {
@@ -571,7 +545,7 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
     {
         Point3f pos;
         Point3f normal;
-        Point3f tangent;
+        Point4f tangent;
         Point2f uv;
     };
 
@@ -579,7 +553,7 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
     {
         Point3f pos;
         Point3f normal;
-        Point3f tangent;
+        Point4f tangent;
         Point2f uv;
         Point4<unsigned short> joints;
         Point4f weights;
@@ -674,6 +648,11 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
             assert(pJoints == nullptr || pJoints->type == TINYGLTF_TYPE_VEC4);
             assert(pWeights == nullptr || pWeights->componentType == TINYGLTF_COMPONENT_TYPE_FLOAT);
             assert(pWeights == nullptr || pWeights->type == TINYGLTF_TYPE_VEC4);
+            if (pTg != nullptr)
+            {
+                assert(pTg == nullptr || pTg->componentType == TINYGLTF_COMPONENT_TYPE_FLOAT);
+                assert(pTg == nullptr || pTg->type == TINYGLTF_TYPE_VEC4);
+            }
 
             const tinygltf::BufferView& posView = model.bufferViews[pos.bufferView];
             const tinygltf::BufferView& normView = model.bufferViews[norm.bufferView];
@@ -689,7 +668,7 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
             const Point3f* pNorm = reinterpret_cast<const Point3f*>(model.buffers[normView.buffer].data.data() + normView.byteOffset + norm.byteOffset);
             const Point2f* pUV = reinterpret_cast<const Point2f*>(model.buffers[uvView.buffer].data.data() + uvView.byteOffset + uv.byteOffset);
 
-            const Point3f* pTang = tgIdx == -1 ? nullptr : reinterpret_cast<const Point3f*>(model.buffers[pTgView->buffer].data.data() + pTgView->byteOffset + pTg->byteOffset);
+            const Point4f* pTang = tgIdx == -1 ? nullptr : reinterpret_cast<const Point4f*>(model.buffers[pTgView->buffer].data.data() + pTgView->byteOffset + pTg->byteOffset);
             const Point4<unsigned short>* pJointsValues = jointsIdx == -1 ? nullptr : reinterpret_cast<const Point4<unsigned short>*>(model.buffers[pJointsView->buffer].data.data() + pJointsView->byteOffset + pJoints->byteOffset);
             const Point4f* pWeightsValues = weightsIdx == -1 ? nullptr : reinterpret_cast<const Point4f*>(model.buffers[pWeightsView->buffer].data.data() + pWeightsView->byteOffset + pWeights->byteOffset);
 
@@ -733,12 +712,12 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
 
             params.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0 });
             params.geomAttributes.push_back({ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 12 });
-            params.geomAttributes.push_back({ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 24 });
-            params.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 36 });
+            params.geomAttributes.push_back({ "TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 24 });
+            params.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 40 });
             if (pJointsValues != nullptr)
             {
-                params.geomAttributes.push_back({ "TEXCOORD", 1, DXGI_FORMAT_R16G16B16A16_UINT, 44 });
-                params.geomAttributes.push_back({ "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 52 });
+                params.geomAttributes.push_back({ "TEXCOORD", 1, DXGI_FORMAT_R16G16B16A16_UINT, 48 });
+                params.geomAttributes.push_back({ "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 56 });
 
                 params.shaderDefines.push_back("SKINNED");
             }
@@ -770,14 +749,7 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
                 params.vertexDataStride = sizeof(NormalWeightedVertex);
             }
 
-            if (m_modelLoadState.flipFaces)
-            {
-                params.rasterizerState.FrontCounterClockwise = TRUE;
-            }
-            else
-            {
-                params.rasterizerState.FrontCounterClockwise = FALSE;
-            }
+            params.rasterizerState.FrontCounterClockwise = FALSE;
             params.rtFormat = m_hdrFormat;
             params.rtFormat2 = m_hdrFormat;
 

@@ -16,7 +16,7 @@ struct VSOut
     float3 normal : NORMAL;
     float2 uv : TEXCOORD;
 #ifdef NORMAL_MAP
-    float3 tangent : TANGENT;
+    float4 tangent : TANGENT;
 #endif // NORMAL_MAP
 };
 
@@ -45,7 +45,7 @@ int JointIndex(int idx)
 
 VSOut VS(float3 pos : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD
 #ifdef NORMAL_MAP
-    , float3 tangent: TANGENT
+    , float4 tangent: TANGENT
 #endif //  NORMAL_MAP
 #ifdef SKINNED
     , uint4 joints : TEXCOORD1
@@ -82,7 +82,8 @@ VSOut VS(float3 pos : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD
     output.normal = mul(_transformNormals, float4(normal, 1.0)).xyz;
     output.uv = uv;
 #ifdef NORMAL_MAP
-    output.tangent = tangent;
+    output.tangent.xyz = mul(_transformNormals, float4(tangent.xyz, 1.0)).xyz;
+    output.tangent.w = tangent.w;
 #endif //  NORMAL_MAP
 
     return output;
@@ -98,11 +99,13 @@ PSOut PS(VSOut input)
 {
     float3 normal = normalize(input.normal);
 #ifdef NORMAL_MAP
-    float3 texNormal = (NormalMapTexture.Sample(MinMagMipLinear, input.uv) - 0.5) * 2.0;
-    float3 tangent = normalize(input.tangent);
+    float3 texNormal = (NormalMapTexture.Sample(MinMagMipLinear, input.uv).xyz - 0.5) * 2.0;
+    float3 tangent = normalize(input.tangent.xyz);
     float3 binormal = normalize(cross(normal, tangent));
-    normal = normalize(texNormal.x * binormal + texNormal.y * tangent + texNormal.z * normal);
+    binormal = -(binormal * sign(input.tangent.w)); // Mirror binormal as we already mirrored source vectors for cross product
+    normal = normalize(texNormal.x * tangent + texNormal.y * binormal + texNormal.z * normal);
 #endif // NORMAL_MAP
+
 
     float3 n = normal;
     float3 v = normalize(cameraPos.xyz - input.worldPos);

@@ -23,7 +23,7 @@ struct VSOut
     float3 normal : NORMAL;
     float2 uv : TEXCOORD;
 #ifdef NORMAL_MAP
-    float3 tangent : TANGENT;
+    float4 tangent : TANGENT;
 #endif // NORMAL_MAP
 };
 
@@ -52,7 +52,7 @@ int JointIndex(int idx)
 
 VSOut VS(float3 pos : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD
 #ifdef NORMAL_MAP
-    , float3 tangent: TANGENT
+    , float4 tangent: TANGENT
 #endif //  NORMAL_MAP
 #ifdef SKINNED
     , uint4 joints : TEXCOORD1
@@ -89,7 +89,8 @@ VSOut VS(float3 pos : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD
     output.normal = mul(modelNormalTransform, mul(_transformNormals, float4(normal, 1.0))).xyz;
     output.uv = uv;
 #ifdef NORMAL_MAP
-    output.tangent = tangent;
+    output.tangent.xyz = mul(modelNormalTransform, mul(_transformNormals, float4(tangent.xyz, 1.0))).xyz;
+    output.tangent.w = tangent.w;
 #endif //  NORMAL_MAP
 
     return output;
@@ -109,14 +110,15 @@ struct PSOut
 #endif // !NO_BLOOM
 };
 
-Dirs CalcDirs(in float3 inNormal, in float2 uv, in float3 inTangent, in float3 worldPos)
+Dirs CalcDirs(in float3 inNormal, in float2 uv, in float4 inTangent, in float3 worldPos)
 {
     float3 normal = normalize(inNormal);
 #ifdef NORMAL_MAP
     float3 texNormal = (NormalMapTexture.Sample(MinMagMipLinear, uv).xyz - 0.5) * 2.0;
-    float3 tangent = normalize(inTangent);
+    float3 tangent = normalize(inTangent.xyz);
     float3 binormal = normalize(cross(normal, tangent));
-    normal = normalize(texNormal.x * binormal + texNormal.y * tangent + texNormal.z * normal);
+    binormal = -(binormal * sign(inTangent.w)); // Mirror binormal as we already mirrored source vectors for cross product
+    normal = normalize(texNormal.x * tangent + texNormal.y * binormal + texNormal.z * normal);
 #endif // NORMAL_MAP
 
     Dirs d;
@@ -135,7 +137,7 @@ PSOut PS(VSOut input)
 #ifdef NORMAL_MAP
     Dirs d = CalcDirs(input.normal, input.uv, input.tangent, input.worldPos);
 #else
-    Dirs d = CalcDirs(input.normal, input.uv, float3(0,0,0), input.worldPos);
+    Dirs d = CalcDirs(input.normal, input.uv, float4(0,0,0,0), input.worldPos);
 #endif
 
     #ifdef PLAIN_SPEC_GLOSS

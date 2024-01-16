@@ -120,8 +120,6 @@ struct PLATFORM_API GLTFModel
     float scaleValue = 1.0f;
     Point3f offset = Point3f();
 
-    bool flipFaces = true;
-
     std::wstring name;
 
     float maxAnimationTime = 0.0f;
@@ -157,7 +155,7 @@ struct PLATFORM_API GLTFModelInstance
 
     void ApplyAnimation();
     void UpdateMatrices();
-    void UpdateNodeMatrices(int nodeIdx, const Matrix4f& parent);
+    void UpdateNodeMatrices(int nodeIdx, const Matrix4f& parent, const Matrix4f& parentNormals);
 
 private:
     void SetupTransform();
@@ -193,7 +191,6 @@ private:
         tinygltf::Model* pModel = nullptr;
         std::vector<Platform::GPUResource> modelTextures;
         std::vector<bool> modelSRGB;
-        bool flipFaces = true;
         bool autoscale = true;
         float scaleValue = 1.0f;
 

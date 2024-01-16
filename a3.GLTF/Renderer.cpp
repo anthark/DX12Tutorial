@@ -2004,7 +2004,7 @@ bool Renderer::ScanNode(const tinygltf::Model& model, int nodeIdx, const std::ve
     {
         Point3f pos;
         Point3f normal;
-        Point3f tangent;
+        Point4f tangent;
         Point2f uv;
     };
 
@@ -2012,7 +2012,7 @@ bool Renderer::ScanNode(const tinygltf::Model& model, int nodeIdx, const std::ve
     {
         Point3f pos;
         Point3f normal;
-        Point3f tangent;
+        Point4f tangent;
         Point2f uv;
         Point4<unsigned short> joints;
         Point4f weights;
@@ -2109,6 +2109,8 @@ bool Renderer::ScanNode(const tinygltf::Model& model, int nodeIdx, const std::ve
             assert(pJoints == nullptr || pJoints->type == TINYGLTF_TYPE_VEC4);
             assert(pWeights == nullptr || pWeights->componentType == TINYGLTF_COMPONENT_TYPE_FLOAT);
             assert(pWeights == nullptr || pWeights->type == TINYGLTF_TYPE_VEC4);
+            assert(pTg == nullptr || pTg->componentType == TINYGLTF_COMPONENT_TYPE_FLOAT);
+            assert(pTg == nullptr || pTg->type == TINYGLTF_TYPE_VEC4);
 
             const tinygltf::BufferView& posView = model.bufferViews[pos.bufferView];
             const tinygltf::BufferView& normView = model.bufferViews[norm.bufferView];
@@ -2124,7 +2126,7 @@ bool Renderer::ScanNode(const tinygltf::Model& model, int nodeIdx, const std::ve
             const Point3f* pNorm = reinterpret_cast<const Point3f*>(model.buffers[normView.buffer].data.data() + normView.byteOffset + norm.byteOffset);
             const Point2f* pUV = reinterpret_cast<const Point2f*>(model.buffers[uvView.buffer].data.data() + uvView.byteOffset + uv.byteOffset);
 
-            const Point3f* pTang = tgIdx == -1 ? nullptr : reinterpret_cast<const Point3f*>(model.buffers[pTgView->buffer].data.data() + pTgView->byteOffset + pTg->byteOffset);
+            const Point4f* pTang = tgIdx == -1 ? nullptr : reinterpret_cast<const Point4f*>(model.buffers[pTgView->buffer].data.data() + pTgView->byteOffset + pTg->byteOffset);
             const Point4<unsigned short>* pJointsValues = jointsIdx == -1 ? nullptr : reinterpret_cast<const Point4<unsigned short>*>(model.buffers[pJointsView->buffer].data.data() + pJointsView->byteOffset + pJoints->byteOffset);
             const Point4f* pWeightsValues = weightsIdx == -1 ? nullptr : reinterpret_cast<const Point4f*>(model.buffers[pWeightsView->buffer].data.data() + pWeightsView->byteOffset + pWeights->byteOffset);
 
@@ -2168,12 +2170,12 @@ bool Renderer::ScanNode(const tinygltf::Model& model, int nodeIdx, const std::ve
 
             params.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0 });
             params.geomAttributes.push_back({ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 12 });
-            params.geomAttributes.push_back({ "TANGENT", 0, DXGI_FORMAT_R32G32B32_FLOAT, 24 });
-            params.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 36 });
+            params.geomAttributes.push_back({ "TANGENT", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 24 });
+            params.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 40 });
             if (pJointsValues != nullptr)
             {
-                params.geomAttributes.push_back({ "TEXCOORD", 1, DXGI_FORMAT_R16G16B16A16_UINT, 44 });
-                params.geomAttributes.push_back({ "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 52 });
+                params.geomAttributes.push_back({ "TEXCOORD", 1, DXGI_FORMAT_R16G16B16A16_UINT, 48 });
+                params.geomAttributes.push_back({ "TEXCOORD", 2, DXGI_FORMAT_R32G32B32A32_FLOAT, 56 });
 
                 params.shaderDefines.push_back("SKINNED");
             }
