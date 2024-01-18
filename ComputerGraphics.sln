@@ -100,6 +100,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "a6.Deferred", "a6.Deferred\
 		{6C9F4FA4-801C-4DA0-989E-A0CD0188CF63} = {6C9F4FA4-801C-4DA0-989E-A0CD0188CF63}
 	EndProjectSection
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "a7.SSAO", "a7.SSAO\a7.SSAO.vcxproj", "{1CF5680D-BC3D-42AE-A27D-5E9272D70094}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -260,6 +262,14 @@ Global
 		{057B0A74-4B0F-448C-B974-46BF3AF71C16}.Release|x64.Build.0 = Release|x64
 		{057B0A74-4B0F-448C-B974-46BF3AF71C16}.Ship|x64.ActiveCfg = Ship|x64
 		{057B0A74-4B0F-448C-B974-46BF3AF71C16}.Ship|x64.Build.0 = Ship|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Debug|x64.ActiveCfg = Debug|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Debug|x64.Build.0 = Debug|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Profile|x64.ActiveCfg = Profile|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Profile|x64.Build.0 = Profile|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Release|x64.ActiveCfg = Release|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Release|x64.Build.0 = Release|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Ship|x64.ActiveCfg = Ship|x64
+		{1CF5680D-BC3D-42AE-A27D-5E9272D70094}.Ship|x64.Build.0 = Ship|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
