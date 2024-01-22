@@ -38,18 +38,7 @@ struct SceneParameters
     enum RenderMode
     {
         RenderModeLighting = 0,
-        RenderModeDiffuse,
-        RenderModeIBLDiffuse,
-        RenderModeSpecular,
-        RenderModeSpecularNormalDestribution,
-        RenderModeSpecularGeometry,
-        RenderModeSpecularFresnel,
-        RenderModeSpecularIBLEnv,
-        RenderModeSpecularIBLFresnel,
-        RenderModeSpecularIBLBRDF,
-
-        RenderModeAlbedo,
-        RenderModeNormals,
+        RenderModeSSAOMask
     };
 
     enum ShadowMode
@@ -225,6 +214,8 @@ private:
     bool DetectFlares();
     void GaussBlur(int& finalBloomIdx);
 
+    bool BlitTexture(D3D12_GPU_DESCRIPTOR_HANDLE srcTexHandle);
+
     void PresetupLights();
     void SetupLights(Lights* pLights);
     void SetupLightsCull(LightsCull* pLightsCull);
@@ -299,6 +290,7 @@ private:
 
     Platform::GPUResource m_ssaoMaskRT;
     D3D12_CPU_DESCRIPTOR_HANDLE m_ssaoMaskRTV;
+    D3D12_GPU_DESCRIPTOR_HANDLE m_ssaoMaskSRV;
 
     Platform::GPUResource m_GBufferAlbedoRT;
     Platform::GPUResource m_GBufferF0RT;
@@ -349,6 +341,8 @@ private:
     GeometryState m_gaussBlurNaive;
     GeometryState m_gaussBlurVertical;
     GeometryState m_gaussBlurHorizontal;
+
+    GeometryState m_blitState;
 
     float m_lastUpdateDelta;
 

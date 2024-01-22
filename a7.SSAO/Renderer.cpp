@@ -70,7 +70,7 @@ struct PostprocessingVertex
 const float BaseLow = 0.01f;
 
 const std::vector<const char*> SceneGeometryTypeNames = {"Single object", "Objects grid"};
-const std::vector<const char*> RenderModeNames = { "Lighting", "  Diffuse", "  IBL Diffuse", "  Specular", "    Normal Distribution", "    Geometry", "    Fresnel", "  IBL Environment", "  IBL Fresnel", "  IBL BRDF", "Albedo", "Normals" };
+const std::vector<const char*> RenderModeNames = { "Lighting", "SSAO Mask" };
 const std::vector<const char*> ShadowMapModeNames = { "Simple", "PSSM", "CSM" };
 
 float RandFloat(float minValue, float maxValue)
@@ -589,6 +589,20 @@ bool Renderer::Init(HWND hWnd)
             geomStateParams.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0 });
             geomStateParams.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 8 });
             geomStateParams.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            geomStateParams.pShaderSourceName = _T("Blit.hlsl");
+            geomStateParams.geomStaticTexturesCount = 1;
+            geomStateParams.depthStencilState.DepthEnable = FALSE;
+            geomStateParams.rtFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+            res = CreateGeometryState(geomStateParams, m_blitState);
+        }
+
+        if (res)
+        {
+            GeometryStateParams geomStateParams;
+            geomStateParams.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0 });
+            geomStateParams.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 8 });
+            geomStateParams.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
             geomStateParams.pShaderSourceName = _T("Bloom.hlsl");
             geomStateParams.shaderDefines.push_back("DETECT");
             geomStateParams.geomStaticTexturesCount = 1;
@@ -778,6 +792,8 @@ void Renderer::Term()
     DestroyGeometryState(m_detectFlaresState);
 
     DestroyGeometryState(m_ssaoMaskState);
+
+    DestroyGeometryState(m_blitState);
 
     DestroyGeometryState(m_tonemapGeomState);
     DestroyGeometryState(m_integrateBRDFState);
@@ -1202,6 +1218,10 @@ bool Renderer::Render()
                 }
 
                 Tonemap(finalBloomIdx);
+                if (m_sceneParams.renderMode == SceneParameters::RenderModeSSAOMask)
+                {
+                    BlitTexture(m_ssaoMaskSRV);
+                }
 
                 if (m_sceneParams.showGrid)
                 {
@@ -1238,7 +1258,7 @@ bool Renderer::Render()
                     ImGui::Checkbox("GPU counters", &m_sceneParams.showGPUCounters);
 
                     //ImGui::SliderInt("Lights", &m_sceneParams.activeLightCount, 1, 4);
-                    //ImGui::ListBox("Render mode", (int*)&m_sceneParams.renderMode, RenderModeNames.data(), (int)RenderModeNames.size());
+                    ImGui::ListBox("Render mode", (int*)&m_sceneParams.renderMode, RenderModeNames.data(), (int)RenderModeNames.size());
                     if (m_sceneParams.editMode)
                     {
                         if (m_sceneParams.modelIdx >= m_menuModels.size())
@@ -1292,6 +1312,14 @@ bool Renderer::Render()
                     else if (!m_sceneParams.editAddLightMode && m_sceneParams.lightIdx != -1)
                     {
                         --m_sceneParams.activeLightCount;
+                    }
+
+                    // SSAO setup window
+                    {
+                        ImGui::Begin("SSAO");
+                        ImGui::SliderFloat("Kernel radius", &m_sceneParams.ssaoKernelRadius, 0.1f, 2.0f);
+                        ImGui::SliderInt("Kernel samples", &m_sceneParams.ssaoSamplesCount, 16, 512);
+                        ImGui::End();
                     }
 
                     // Only setup 0-index (directional) light
@@ -1889,6 +1917,19 @@ void Renderer::GaussBlur(int& finalBloomIdx)
     finalBloomIdx = 0;
 }
 
+bool Renderer::BlitTexture(D3D12_GPU_DESCRIPTOR_HANDLE srcTexHandle)
+{
+    PIX_MARKER_SCOPE(Blit);
+
+    //m_counters[(size_t)CounterType::Tonemapping].second.Start(GetCurrentCommandList());
+
+    bool res = CallPostProcess(m_blitState, srcTexHandle);
+
+    //m_counters[(size_t)CounterType::Tonemapping].second.Stop(GetCurrentCommandList());
+
+    return res;
+}
+
 void Renderer::PresetupLights()
 {
     int dirLightIdx = -1;
@@ -2374,6 +2415,21 @@ bool Renderer::CreateSSAOTextures()
         desc.Texture2D.PlaneSlice = 0;
 
         GetDevice()->GetDXDevice()->CreateRenderTargetView(m_ssaoMaskRT.pResource, &desc, m_ssaoMaskRTV);
+    }
+    if (res)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE ssaoMaskSRVCpu;
+
+        res = GetDevice()->AllocateStaticDescriptors(1, ssaoMaskSRVCpu, m_ssaoMaskSRV);
+        if (res)
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC texDesc = {};
+            texDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            texDesc.Format = m_ssaoMaskRT.pResource->GetDesc().Format;
+            texDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            texDesc.Texture2D.MipLevels = 1;
+            GetDevice()->GetDXDevice()->CreateShaderResourceView(m_ssaoMaskRT.pResource, &texDesc, ssaoMaskSRVCpu);
+        }
     }
 
     return res;
@@ -3720,7 +3776,7 @@ void Renderer::PrepareColorPass(const Platform::Camera& camera, const D3D12_RECT
     pCommonCB->cameraProj = camera.CalcProjMatrix(aspectRatioHdivW);
     pCommonCB->cameraPos = camera.CalcPos();
     pCommonCB->sceneParams.x = m_sceneParams.exposure;
-    pCommonCB->intSceneParams.x = m_sceneParams.renderMode;
+    pCommonCB->intSceneParams.x = SceneParameters::RenderModeLighting;
 
     pCommonCB->intSceneParams.y = 0;
     pCommonCB->intSceneParams.y |= (m_sceneParams.applyBloom ? RENDER_FLAG_APPLY_BLOOM : 0);
