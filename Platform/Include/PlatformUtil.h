@@ -17,6 +17,13 @@ T DivUp(
     return (a + b - 1) / b;
 }
 
+// Linear interpolation
+template<typename T>
+T Lerp(T a, T b, float t)
+{
+    return (T)(a + (b - a) * t);
+}
+
 // Simple AABB structure
 template <typename T>
 struct AABB

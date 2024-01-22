@@ -95,6 +95,10 @@ struct SceneParameters
     int modelIdx;
     RenderArch renderArch;
 
+    // SSAO setup
+    int ssaoSamplesCount;
+    float ssaoKernelRadius;
+
     bool animated;
     bool showGPUCounters;
 
@@ -198,6 +202,7 @@ private:
     };
 
 private:
+    static const Point4f WhiteColor;
     static const Point4f BackColor;
     static const Point4f BlackBackColor;
     static const DXGI_FORMAT HDRFormat;
@@ -215,6 +220,7 @@ private:
     void MeasureLuminance();
 
     bool CallPostProcess(GeometryState& state, D3D12_GPU_DESCRIPTOR_HANDLE srv = {});
+    bool DrawPostProcessRect();
     bool Tonemap(int finalBloomIdx);
     bool DetectFlares();
     void GaussBlur(int& finalBloomIdx);
@@ -229,6 +235,9 @@ private:
 
     bool CreateHDRTexture();
     void DestroyHDRTexture();
+
+    bool CreateSSAOTextures();
+    void DestroySSAOTextures();
 
     bool CreateDeferredTextures();
     void DestroyDeferredTextures();
@@ -274,6 +283,11 @@ private:
 
     void DrawCounters();
 
+    bool SSAOMaskGeneration();
+
+    float Random(float minVal, float maxVal);
+    void GenerateSSAOKernel(Point4f* pSamples, int sampleCount);
+
 private:
     std::vector<Platform::GLTFGeometry> m_serviceGeometries;
     std::vector<TestGeometry> m_cubemapTestGeometries;
@@ -282,6 +296,9 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_hdrRTV;
     D3D12_GPU_DESCRIPTOR_HANDLE m_hdrSRV;
     D3D12_CPU_DESCRIPTOR_HANDLE m_hdrSRVCpu;
+
+    Platform::GPUResource m_ssaoMaskRT;
+    D3D12_CPU_DESCRIPTOR_HANDLE m_ssaoMaskRTV;
 
     Platform::GPUResource m_GBufferAlbedoRT;
     Platform::GPUResource m_GBufferF0RT;
@@ -325,6 +342,8 @@ private:
     Platform::GPUResource m_tonemapParams;
 
     GeometryState m_tonemapGeomState;
+
+    GeometryState m_ssaoMaskState;
 
     GeometryState m_detectFlaresState;
     GeometryState m_gaussBlurNaive;

@@ -27,6 +27,7 @@
 #include "Tonemap.h"
 #include "EquirectToCubemap.h"
 #include "Lightgrid.h"
+#include "SSAOMask.h"
 
 #include <chrono>
 
@@ -187,7 +188,7 @@ SceneParameters::SceneParameters()
     activeLightCount = 1;
     lights[0].lightType = LT_Direction;
     lights[0].color = Point3f{ 1,1,1 };
-    lights[0].intensity = 3.0f;
+    lights[0].intensity = 10.0f;
     lights[0].distance = 5.0f;
     lights[0].inverseDirSphere = Point2f{(float)(1.5 * M_PI), (float)(0.25 * M_PI) };
 
@@ -211,6 +212,9 @@ SceneParameters::SceneParameters()
     shadowSplitsDist[1] = 33.0f;
     shadowSplitsDist[2] = 100.0f;
     shadowSplitsDist[3] = 300.0f;
+
+    ssaoSamplesCount = 128;
+    ssaoKernelRadius = 1.69f;
 }
 
 int SceneParameters::AddRandomLight()
@@ -233,6 +237,7 @@ int SceneParameters::AddRandomLight()
     return activeLightCount - 1;
 }
 
+const Point4f Renderer::WhiteColor = Point4f{ 1,1,1,1 };
 const Point4f Renderer::BackColor = Point4f{0.25f,0.25f,0.25f,1};
 const Point4f Renderer::BlackBackColor = Point4f{ 0,0,0,0 };
 const DXGI_FORMAT Renderer::HDRFormat = DXGI_FORMAT_R11G11B10_FLOAT;
@@ -519,6 +524,15 @@ bool Renderer::Init(HWND hWnd)
 
         if (res)
         {
+            res = GetDevice()->AllocateRenderTargetView(m_ssaoMaskRTV, 1);
+            if (res)
+            {
+                res = CreateSSAOTextures();
+            }
+        }
+
+        if (res)
+        {
             res = GetDevice()->AllocateRenderTargetView(m_brdfRTV);
             if (res)
             {
@@ -553,6 +567,20 @@ bool Renderer::Init(HWND hWnd)
             geomStateParams.depthStencilState.DepthEnable = FALSE;
 
             res = CreateGeometryState(geomStateParams, m_tonemapGeomState);
+        }
+
+        if (res)
+        {
+            GeometryStateParams geomStateParams;
+            geomStateParams.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0 });
+            geomStateParams.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 8 });
+            geomStateParams.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+            geomStateParams.pShaderSourceName = _T("SSAOMask.hlsl");
+            geomStateParams.geomStaticTexturesCount = 2;
+            geomStateParams.depthStencilState.DepthEnable = FALSE;
+            geomStateParams.rtFormat = DXGI_FORMAT_R32_FLOAT;
+
+            res = CreateGeometryState(geomStateParams, m_ssaoMaskState);
         }
 
         if (res)
@@ -749,6 +777,8 @@ void Renderer::Term()
     DestroyGeometryState(m_gaussBlurNaive);
     DestroyGeometryState(m_detectFlaresState);
 
+    DestroyGeometryState(m_ssaoMaskState);
+
     DestroyGeometryState(m_tonemapGeomState);
     DestroyGeometryState(m_integrateBRDFState);
 
@@ -757,6 +787,7 @@ void Renderer::Term()
     DestroyDeferredTextures();
     DestroyHDRTexture();
     DestroyLightgrid();
+    DestroySSAOTextures();
 
     Platform::BaseRenderer::Term();
 }
@@ -1006,6 +1037,10 @@ bool Renderer::Render()
                     {
                         LightCulling();
                     }
+                }
+                if (m_sceneParams.renderArch == SceneParameters::ForwardPlus)
+                {
+                    SSAOMaskGeneration();
                 }
 
                 GetCurrentCommandList()->OMSetRenderTargets(2, &m_hdrRTV, TRUE, &dsvHandle);
@@ -1495,6 +1530,7 @@ bool Renderer::Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect)
         DestroyLightgrid();
         DestroyDeferredTextures();
         DestroyHDRTexture();
+        DestroySSAOTextures();
         res = CreateHDRTexture();
         if (res)
         {
@@ -1503,6 +1539,10 @@ bool Renderer::Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect)
         if (res)
         {
             res = CreateLightgrid();
+        }
+        if (res)
+        {
+            res = CreateSSAOTextures();
         }
         if (res)
         {
@@ -1658,6 +1698,17 @@ void Renderer::MeasureLuminance()
 
 bool Renderer::CallPostProcess(GeometryState& state, D3D12_GPU_DESCRIPTOR_HANDLE srv)
 {
+    SetupGeometryState(state);
+
+    GetCurrentCommandList()->SetGraphicsRootConstantBufferView(1, m_tonemapParams.pResource->GetGPUVirtualAddress());
+
+    GetCurrentCommandList()->SetGraphicsRootDescriptorTable(3, srv.ptr == 0 ? m_hdrSRV : srv);
+
+    return DrawPostProcessRect();
+}
+
+bool Renderer::DrawPostProcessRect()
+{
     UINT64 gpuVirtualAddress;
 
     PostprocessingVertex* pVertices = nullptr;
@@ -1714,12 +1765,6 @@ bool Renderer::CallPostProcess(GeometryState& state, D3D12_GPU_DESCRIPTOR_HANDLE
 
     if (res)
     {
-        SetupGeometryState(state);
-
-        GetCurrentCommandList()->SetGraphicsRootConstantBufferView(1, m_tonemapParams.pResource->GetGPUVirtualAddress());
-
-        GetCurrentCommandList()->SetGraphicsRootDescriptorTable(3, srv.ptr == 0 ? m_hdrSRV : srv);
-
         GetCurrentCommandList()->DrawIndexedInstanced(6, 1, 0, 0, 0);
     }
 
@@ -2296,6 +2341,47 @@ void Renderer::DestroyHDRTexture()
     GetDevice()->ReleaseGPUResource(m_lumTexture1);
     GetDevice()->ReleaseGPUResource(m_lumTexture0);
     GetDevice()->ReleaseGPUResource(m_hdrRT);
+}
+
+bool Renderer::CreateSSAOTextures()
+{
+    assert(m_ssaoMaskRT.pResource == nullptr);
+
+    UINT height = GetRect().bottom - GetRect().top;
+    UINT width = GetRect().right - GetRect().left;
+
+    // Create albedo texture
+    Platform::CreateTextureParams params;
+    params.format = DXGI_FORMAT_R32_FLOAT;
+    params.height = height;
+    params.width = width;
+    params.enableRT = true;
+    params.initialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+    D3D12_CLEAR_VALUE clearValue;
+    clearValue.Format = params.format;
+    memcpy(&clearValue.Color, &WhiteColor, sizeof(WhiteColor));
+    params.pOptimizedClearValue = &clearValue;
+
+    bool res = Platform::CreateTexture(params, false, GetDevice(), m_ssaoMaskRT);
+
+    if (res)
+    {
+        D3D12_RENDER_TARGET_VIEW_DESC desc;
+        desc.Format = params.format;
+        desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+        desc.Texture2D.MipSlice = 0;
+        desc.Texture2D.PlaneSlice = 0;
+
+        GetDevice()->GetDXDevice()->CreateRenderTargetView(m_ssaoMaskRT.pResource, &desc, m_ssaoMaskRTV);
+    }
+
+    return res;
+}
+
+void Renderer::DestroySSAOTextures()
+{
+    GetDevice()->ReleaseGPUResource(m_ssaoMaskRT);
 }
 
 bool Renderer::CreateDeferredTextures()
@@ -3631,6 +3717,7 @@ void Renderer::PrepareColorPass(const Platform::Camera& camera, const D3D12_RECT
     SceneCommon* pCommonCB = reinterpret_cast<SceneCommon*>(dynCBData[0]);
 
     pCommonCB->VP = camera.CalcViewMatrix() * camera.CalcProjMatrix(aspectRatioHdivW);
+    pCommonCB->cameraProj = camera.CalcProjMatrix(aspectRatioHdivW);
     pCommonCB->cameraPos = camera.CalcPos();
     pCommonCB->sceneParams.x = m_sceneParams.exposure;
     pCommonCB->intSceneParams.x = m_sceneParams.renderMode;
@@ -4185,5 +4272,104 @@ void Renderer::DrawCounters()
 #else
         m_pTextDraw->DrawText(m_counterFontId, Point3f{ 1,1,1 }, _T("%s: %6.2fus"), m_counters[id].first.c_str(), m_counters[id].second.GetUSec());
 #endif
+    }
+}
+
+bool Renderer::SSAOMaskGeneration()
+{
+    PIX_MARKER_SCOPE(SSAOMask);
+
+    //m_counters[(size_t)CounterType::Tonemapping].second.Start(GetCurrentCommandList());
+
+    bool res = GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    if (res)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE dsvHandle = GetBackBufferDSVHandle();
+        GetCurrentCommandList()->OMSetRenderTargets(1, &m_ssaoMaskRTV, TRUE, &dsvHandle);
+
+        SetupGeometryState(m_ssaoMaskState);
+
+        SSAOMaskParams* pSSAOMaskParams = nullptr;
+        UINT64 cbAddress = 0;
+        res = GetDevice()->AllocateDynamicBuffer(sizeof(SSAOMaskParams), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, (void**)&pSSAOMaskParams, cbAddress);
+        if (res)
+        {
+            // Setup SSAO mask parameters
+            UINT height = GetRect().bottom - GetRect().top;
+            UINT width = GetRect().right - GetRect().left;
+
+            float aspectRatioHdivW = (float)height / width;
+
+            pSSAOMaskParams->invVP = GetCamera()->CalcProjMatrix(aspectRatioHdivW).Inverse();
+
+            pSSAOMaskParams->sampleCount.x = m_sceneParams.ssaoSamplesCount;
+            pSSAOMaskParams->ssaoParams.x = m_sceneParams.ssaoKernelRadius;
+            GenerateSSAOKernel(pSSAOMaskParams->samples, m_sceneParams.ssaoSamplesCount);
+
+            GetCurrentCommandList()->SetGraphicsRootConstantBufferView(1, cbAddress);
+        }
+        if (res)
+        {
+            D3D12_RESOURCE_DESC srcDesc = GetDepthBuffer().pResource->GetDesc();
+
+            D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+            D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+
+            GetDevice()->AllocateDynamicDescriptors(1, cpuHandle, gpuHandle);
+
+            // Setup src texture
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MipLevels = 1;
+            GetDevice()->GetDXDevice()->CreateShaderResourceView(GetDepthBuffer().pResource, &srvDesc, cpuHandle);
+
+            //cpuHandle.ptr += GetDevice()->GetSRVDescSize();
+
+            // TODO Normals will be source textures here
+            GetCurrentCommandList()->SetGraphicsRootDescriptorTable(3, gpuHandle);
+        }
+        if (res)
+        {
+            res = DrawPostProcessRect();
+        }
+    }
+    if (res)
+    {
+        res = GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+
+    //m_counters[(size_t)CounterType::Tonemapping].second.Stop(GetCurrentCommandList());
+
+    return res;
+}
+
+float Renderer::Random(float minVal, float maxVal)
+{
+    return (maxVal - minVal) * (float)rand() / RAND_MAX + minVal;
+}
+
+void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount)
+{
+    srand(12345);
+
+    for (int i = 0; i < sampleCount; i++)
+    {
+        Point4f s(
+            Random(-1.0f, 1.0f),
+            Random(-1.0f, 1.0f),
+            Random(-1.0f, 1.0f),
+            0.0f
+        );
+        s.normalize();
+
+        s = s * Random(0, 1);
+
+        float scale = float(i) / float(sampleCount);
+        scale = Lerp(0.1f, 1.0f, scale * scale);
+        s = s * scale;
+
+        pSamples[i] = s;
     }
 }
