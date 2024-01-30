@@ -46,7 +46,7 @@ struct TextVertex
 }
 
 Renderer::Renderer(Platform::Device* pDevice)
-    : Platform::BaseRenderer(pDevice, 2, 7, { sizeof(Matrix4f), sizeof(Lights) })
+    : Platform::BaseRenderer(pDevice, 2, 32, { sizeof(Matrix4f), sizeof(Lights) })
     , CameraControlEuler()
     , m_pTextDraw(nullptr)
     , m_fpsCount(0)

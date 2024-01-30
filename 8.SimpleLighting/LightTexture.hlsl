@@ -6,7 +6,7 @@ CONST_BUFFER(Objects, 2)
     float4x4 transformNormals;
 }
 
-Texture2D ColorTexture : register(t7);
+Texture2D ColorTexture : register(t32);
 SamplerState Sampler : register(s0);
 
 struct VSOut

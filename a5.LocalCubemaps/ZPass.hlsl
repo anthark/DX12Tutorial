@@ -1,6 +1,6 @@
 #include "Object.h"
 
-Texture2D DiffuseTexture : register(t7);
+Texture2D DiffuseTexture : register(t32);
 
 SamplerState MinMagMipLinear : register(s0);
 

@@ -171,7 +171,7 @@ const Platform::CubemapBuilder::InitParams& Renderer::CubemapBuilderParams = {
 };
 
 Renderer::Renderer(Platform::Device* pDevice)
-    : Platform::BaseRenderer(pDevice, 2, 7, { sizeof(Matrix4f), sizeof(Lights) }, 1 + ShadowSplits + 1)
+    : Platform::BaseRenderer(pDevice, 2, 32, { sizeof(Matrix4f), sizeof(Lights) }, 1 + ShadowSplits + 1)
     , CameraControlEuler()
     , m_pTextDraw(nullptr)
     , m_fpsCount(0)
@@ -1932,7 +1932,7 @@ bool Renderer::CreateComputePipeline()
         descRanges[0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
         descRanges[0].RegisterSpace = 0;
 
-        descRanges[1].BaseShaderRegister = 7;
+        descRanges[1].BaseShaderRegister = 32;
         descRanges[1].NumDescriptors = 1;
         descRanges[1].OffsetInDescriptorsFromTableStart = 1;
         descRanges[1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;

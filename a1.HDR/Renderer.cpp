@@ -59,7 +59,7 @@ const Point4f Renderer::BackColor = Point4f{0,0,0,1};
 const DXGI_FORMAT Renderer::HDRFormat = DXGI_FORMAT_R11G11B10_FLOAT;
 
 Renderer::Renderer(Platform::Device* pDevice)
-    : Platform::BaseRenderer(pDevice, 2, 7, { sizeof(Matrix4f), sizeof(Lights) })
+    : Platform::BaseRenderer(pDevice, 2, 32, { sizeof(Matrix4f), sizeof(Lights) })
     , CameraControlEuler()
     , m_pTextDraw(nullptr)
     , m_fpsCount(0)

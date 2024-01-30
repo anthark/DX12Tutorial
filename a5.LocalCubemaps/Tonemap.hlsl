@@ -1,7 +1,7 @@
 #include "Tonemap.h"
 
-Texture2D HDRTexture : register(t7);
-Texture2D HDRBloom : register(t8);
+Texture2D HDRTexture : register(t32);
+Texture2D HDRBloom : register(t33);
 SamplerState NoMipSampler : register(s1);
 
 struct VSOut

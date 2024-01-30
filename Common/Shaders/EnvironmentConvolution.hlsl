@@ -1,6 +1,6 @@
 #include "EquirectToCubemap.h"
 
-TextureCube ColorTexture : register(t7);
+TextureCube ColorTexture : register(t32);
 SamplerState Sampler : register(s1);
 
 struct VSOut

@@ -1,6 +1,6 @@
 #include "ShaderCommon.h"
 
-Texture2D Source : register(t7);
+Texture2D Source : register(t32);
 SamplerState MinMagLinearMipPoint : register(s1);
 
 struct VSOut

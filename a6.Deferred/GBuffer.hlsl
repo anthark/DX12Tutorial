@@ -1,16 +1,16 @@
 #include "Object.h"
 
-Texture2D DiffuseTexture : register(t7);
+Texture2D DiffuseTexture : register(t32);
 #ifdef KHR_SPECGLOSS
-Texture2D SpecularGlossinessTexture : register(t8);
+Texture2D SpecularGlossinessTexture : register(t33);
 #else
-Texture2D MetalRoughTexture : register(t8);
+Texture2D MetalRoughTexture : register(t33);
 #endif
 #ifdef NORMAL_MAP
-Texture2D NormalMapTexture : register(t9);
+Texture2D NormalMapTexture : register(t34);
 #endif // NORMAL_MAP
 #ifdef EMISSIVE_MAP
-Texture2D EmissiveMapTexture : register(t10);
+Texture2D EmissiveMapTexture : register(t35);
 #endif // EMISSIVE_MAP
 
 SamplerState MinMagMipLinear : register(s0);

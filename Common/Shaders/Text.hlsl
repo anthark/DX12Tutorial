@@ -8,7 +8,7 @@ cbuffer Object : register (b1)
     float4x4 transform;
 }
 
-Texture2D ColorTexture : register(t7);
+Texture2D ColorTexture : register(t32);
 SamplerState Sampler : register(s1);
 
 struct VSOut

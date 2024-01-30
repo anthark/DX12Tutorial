@@ -1,6 +1,6 @@
 #include "SSAOMask.h"
 
-Texture2D DepthTexture : register(t7);
+Texture2D DepthTexture : register(t32);
 SamplerState NoMipSampler : register(s1);
 
 float3 PixelToNDC(float2 pixCoord)

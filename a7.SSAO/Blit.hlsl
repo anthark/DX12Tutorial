@@ -1,4 +1,4 @@
-Texture2D SrcTexture : register(t7);
+Texture2D SrcTexture : register(t32);
 SamplerState NoMipSampler : register(s1);
 
 struct VSOut

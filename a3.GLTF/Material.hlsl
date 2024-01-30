@@ -3,10 +3,10 @@
 #include "ShaderCommon.h"
 #include "PBRMaterial.h"
 
-Texture2D DiffuseTexture : register(t7);
-Texture2D MetalRoughTexture : register(t8);
+Texture2D DiffuseTexture : register(t32);
+Texture2D MetalRoughTexture : register(t33);
 #ifdef NORMAL_MAP
-Texture2D NormalMapTexture : register(t9);
+Texture2D NormalMapTexture : register(t34);
 #endif // NORMAL_MAP
 
 struct VSOut

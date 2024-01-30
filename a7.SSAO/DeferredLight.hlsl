@@ -3,11 +3,11 @@
 
 #include "LightGeometry.h"
 
-Texture2D Albedo : register (t7);
-Texture2D TexF0 : register (t8);
-Texture2D N : register (t9);
-Texture2D Emissive : register (t10);
-Texture2D DepthTexture : register (t11);
+Texture2D Albedo : register (t32);
+Texture2D TexF0 : register (t33);
+Texture2D N : register (t34);
+Texture2D Emissive : register (t35);
+Texture2D DepthTexture : register (t36);
 
 struct VSOut
 {

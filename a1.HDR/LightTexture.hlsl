@@ -1,7 +1,7 @@
 #include "Light.h"
 #include "Object.h"
 
-Texture2D ColorTexture : register(t7);
+Texture2D ColorTexture : register(t32);
 SamplerState Sampler : register(s0);
 
 struct VSOut
