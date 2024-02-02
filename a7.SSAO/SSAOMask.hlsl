@@ -55,6 +55,8 @@ float4 PS(VSOut input) : SV_TARGET
 			++occlusion;
 		}
 	}
+	
+	float maskValue = (float)occlusion / sampleCount.x;
 
-    return float4((float)occlusion / sampleCount.x, 0.0, 0.0, 1.0);
+    return float4(maskValue, maskValue, maskValue, 1.0);
 }

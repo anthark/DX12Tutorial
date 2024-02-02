@@ -21,6 +21,7 @@ TextureCubeArray LocalEnvironmentMapArray : register(t6);
 Texture2D<uint4> LightGrid : register(t5);
 StructuredBuffer<uint> LightgridCells : register(t6);
 #endif // !USE_LOCAL_CUBEMAPS
+Texture2D<float4> SSAOMask : register(t7);
 
 SamplerState MinMagMipLinear : register(s0);
 SamplerState MinMagLinearMipPoint : register(s1);
@@ -304,8 +305,11 @@ float4 CalcPBRColor(in float3 worldPos, in float3 n, in float3 v, in float rough
     }
 #endif // !NO_POINT_LIGHTS
 
+    bool applySSAO = (intSceneParams.y & RENDER_FLAG_APPLY_SSAO) != 0;
+    float ambientOcclusion = applySSAO ? SSAOMask.Sample(MinMagLinearMipPointBorder, pixelCoord / imageSize.xy).x : 1.0;
+
     // Final composition with ambient
-    color.xyz += CalcPBRAmbient(worldPos, r, roughness, dielectricF0, metalF0, metalness, n, v);
+    color.xyz += CalcPBRAmbient(worldPos, r, roughness, dielectricF0, metalF0, metalness, n, v) * ambientOcclusion;
 
     return color;
 }
@@ -394,8 +398,11 @@ float4 CalcPBRColor_KHRSpecGloss(in float3 worldPos, in float3 n, in float3 v, i
     }
 #endif // !NO_POINT_LIGHTS
 
+    bool applySSAO = (intSceneParams.y & RENDER_FLAG_APPLY_SSAO) != 0;
+    float ambientOcclusion = applySSAO ? SSAOMask.Sample(MinMagLinearMipPointBorder, pixelCoord / imageSize.xy).x : 1.0;
+
     // Final composition with ambient color
-    color.xyz += CalcPBRAmbient_KHRSpecGloss(worldPos, r, roughness, inF0, n, v, Cdiff);
+    color.xyz += CalcPBRAmbient_KHRSpecGloss(worldPos, r, roughness, inF0, n, v, Cdiff) * ambientOcclusion;
 
     return color;
 }

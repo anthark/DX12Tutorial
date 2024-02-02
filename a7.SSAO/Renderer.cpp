@@ -155,6 +155,7 @@ SceneParameters::SceneParameters()
     , showGrid(false)
     , showCubemap(true)
     , applyBloom(true)
+    , applySSAO(true)
     , renderMode(RenderModeLighting)
     , cubemapIdx(0)
     , pPrevModel(nullptr)
@@ -578,7 +579,7 @@ bool Renderer::Init(HWND hWnd)
             geomStateParams.pShaderSourceName = _T("SSAOMask.hlsl");
             geomStateParams.geomStaticTexturesCount = 2;
             geomStateParams.depthStencilState.DepthEnable = FALSE;
-            geomStateParams.rtFormat = DXGI_FORMAT_R32_FLOAT;
+            geomStateParams.rtFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
 
             res = CreateGeometryState(geomStateParams, m_ssaoMaskState);
         }
@@ -1246,6 +1247,7 @@ bool Renderer::Render()
                     //ImGui::Checkbox("Show grid", &m_sceneParams.showGrid);
                     //ImGui::Checkbox("Show cubemap", &m_sceneParams.showCubemap);
                     ImGui::Checkbox("Apply bloom", &m_sceneParams.applyBloom);
+                    ImGui::Checkbox("Apply SSAO", &m_sceneParams.applySSAO);
                     ImGui::Checkbox("VSync", &m_sceneParams.vsync);
                     ImGui::RadioButton("Forward render", (int*)&m_sceneParams.renderArch, 0);
                     ImGui::RadioButton("Deferred render", (int*)&m_sceneParams.renderArch, 1);
@@ -2393,7 +2395,7 @@ bool Renderer::CreateSSAOTextures()
 
     // Create albedo texture
     Platform::CreateTextureParams params;
-    params.format = DXGI_FORMAT_R32_FLOAT;
+    params.format = DXGI_FORMAT_R32G32B32A32_FLOAT;
     params.height = height;
     params.width = width;
     params.enableRT = true;
@@ -3783,6 +3785,7 @@ void Renderer::PrepareColorPass(const Platform::Camera& camera, const D3D12_RECT
     pCommonCB->intSceneParams.y |= (m_sceneParams.pcf ? RENDER_FLAG_PCF_ON : 0);
     pCommonCB->intSceneParams.y |= (m_sceneParams.tintSplits ? RENDER_FLAG_TINT_SPLITS : 0);
     pCommonCB->intSceneParams.y |= (m_sceneParams.tintOutArea ? RENDER_FLAG_TINT_OUT_AREA : 0);
+    pCommonCB->intSceneParams.y |= (m_sceneParams.applySSAO ? RENDER_FLAG_APPLY_SSAO : 0);
 
     pCommonCB->intSceneParams.z = m_sceneParams.shadowMode;
     pCommonCB->intSceneParams.w = m_sceneParams.renderArch == SceneParameters::ForwardPlus ? 1 : 0;
@@ -3931,6 +3934,16 @@ void Renderer::PrepareColorPass(const Platform::Camera& camera, const D3D12_RECT
             lightIndexDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
             GetDevice()->GetDXDevice()->CreateShaderResourceView(m_lightgridList.pResource, &lightIndexDesc, beginParams.cpuTextureHandles);
         }
+
+        beginParams.cpuTextureHandles.ptr += GetDevice()->GetSRVDescSize();
+
+        // Setup SSAO mask
+        D3D12_SHADER_RESOURCE_VIEW_DESC ssaoMaskDesc = {};
+        ssaoMaskDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        ssaoMaskDesc.Format = m_ssaoMaskRT.pResource->GetDesc().Format;
+        ssaoMaskDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        ssaoMaskDesc.Texture2D.MipLevels = 1;
+        GetDevice()->GetDXDevice()->CreateShaderResourceView(m_ssaoMaskRT.pResource, &ssaoMaskDesc, beginParams.cpuTextureHandles);
     }
     // <--
 }

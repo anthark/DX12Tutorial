@@ -73,6 +73,7 @@ struct SceneParameters
     bool showGrid;
     bool showCubemap;
     bool applyBloom;
+    bool applySSAO;
     RenderMode renderMode;
     int cubemapIdx;
     Platform::GLTFModel* pPrevModel;
