@@ -587,13 +587,12 @@ bool Renderer::Init(HWND hWnd)
         if (res)
         {
             GeometryStateParams geomStateParams;
-            geomStateParams.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT, 0 });
-            geomStateParams.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 8 });
+            geomStateParams.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0 });
             geomStateParams.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-            geomStateParams.pShaderSourceName = _T("Blit.hlsl");
+            geomStateParams.pShaderSourceName = _T("../Common/Shaders/SimpleCopy.hlsl");
             geomStateParams.geomStaticTexturesCount = 1;
-            geomStateParams.depthStencilState.DepthEnable = FALSE;
             geomStateParams.rtFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+            geomStateParams.depthStencilState.DepthEnable = FALSE;
 
             res = CreateGeometryState(geomStateParams, m_blitState);
         }
