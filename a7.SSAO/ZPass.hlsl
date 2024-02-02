@@ -1,13 +1,22 @@
 #include "Object.h"
 
 Texture2D DiffuseTexture : register(t32);
+#ifdef NORMAL_MAP
+Texture2D NormalMapTexture : register(t34);
+#endif // NORMAL_MAP
 
 SamplerState MinMagMipLinear : register(s0);
+
+#include "Directions.h"
 
 struct VSOut
 {
     float4 pos : SV_POSITION;
     float2 uv : TEXCOORD;
+    float3 normal : NORMAL;
+#ifdef NORMAL_MAP
+    float4 tangent : TANGENT;
+#endif // NORMAL_MAP
 };
 
 int JointIndex(int idx)
@@ -37,6 +46,9 @@ VSOut VS(
     float3 pos : POSITION
     , float3 normal : NORMAL
     , float2 uv : TEXCOORD
+#ifdef NORMAL_MAP
+    , float4 tangent: TANGENT
+#endif //  NORMAL_MAP
 #ifdef SKINNED
     , uint4 joints : TEXCOORD1
     , float4 weights : TEXCOORD2
@@ -57,20 +69,30 @@ VSOut VS(
         + nodeTransforms[jointIdx.y] * weights.y
         + nodeTransforms[jointIdx.z] * weights.z
         + nodeTransforms[jointIdx.w] * weights.w;
+    float4x4 _transformNormals = nodeNormalTransforms[jointIdx.x] * weights.x
+        + nodeNormalTransforms[jointIdx.y] * weights.y
+        + nodeNormalTransforms[jointIdx.z] * weights.z
+        + nodeNormalTransforms[jointIdx.w] * weights.w;
 #else
     float4x4 _transform = nodeTransforms[nodeIndex.x];
+    float4x4 _transformNormals = nodeNormalTransforms[nodeIndex.x];
 #endif // !SKINNED
 
     float4 worldPos = mul(modelTransform, mul(_transform, float4(pos, 1.0)));
     output.pos = mul(VP, worldPos);
+    output.normal = mul(modelNormalTransform, mul(_transformNormals, float4(normal, 1.0))).xyz;
     output.uv = uv;
+#ifdef NORMAL_MAP
+    output.tangent.xyz = mul(modelNormalTransform, mul(_transformNormals, float4(tangent.xyz, 1.0))).xyz;
+    output.tangent.w = tangent.w;
+#endif //  NORMAL_MAP
 
     return output;
 }
 
 #ifdef KHR_SPECGLOSS
 
-void PS(VSOut input)
+float4 PS(VSOut input) : SV_Target0
 {
     #ifdef PLAIN_COLOR
         float4 Cdiff = ksgDiffFactor;
@@ -85,11 +107,19 @@ void PS(VSOut input)
         discard;
     }
     #endif // ALPHA_KILL
+
+#ifdef NORMAL_MAP
+    Dirs d = CalcDirs(input.normal, input.uv, input.tangent, float4(0,0,0,0));
+#else
+    Dirs d = CalcDirs(input.normal, input.uv, float4(0,0,0,0), float4(0,0,0,0));
+#endif
+
+    return float4(d.n * 0.5 + float3(0.5, 0.5, 0.5), 1.0);
 }
 
 #else
 
-void PS(VSOut input)
+float4 PS(VSOut input) : SV_Target0
 {
     #ifdef PLAIN_COLOR
         float4 F0 = metalF0;
@@ -105,6 +135,14 @@ void PS(VSOut input)
         discard;
     }
     #endif // ALPHA_KILL
+
+#ifdef NORMAL_MAP
+    Dirs d = CalcDirs(input.normal, input.uv, input.tangent, float4(0,0,0,0));
+#else
+    Dirs d = CalcDirs(input.normal, input.uv, float4(0,0,0,0), float4(0,0,0,0));
+#endif
+
+    return float4(d.n * 0.5 + float3(0.5, 0.5, 0.5), 1.0);
 }
 
 #endif // !KHR_SPECGLOSS

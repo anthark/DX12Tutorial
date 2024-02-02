@@ -1046,7 +1046,7 @@ bool Renderer::Render()
 
                 if (m_sceneParams.renderArch == SceneParameters::ForwardPlus || m_sceneParams.renderArch == SceneParameters::Forward)
                 {
-                    GetCurrentCommandList()->OMSetRenderTargets(0, nullptr, TRUE, &dsvHandle);
+                    GetCurrentCommandList()->OMSetRenderTargets(1, &m_GBufferNormalRTV, TRUE, &dsvHandle);
 
                     ForwardPlusRenderDepthPrepass();
                     if (m_sceneParams.renderArch == SceneParameters::ForwardPlus)
@@ -3168,6 +3168,7 @@ bool Renderer::CreateTerrainGeometry()
         }
     }
 
+    Platform::ZPassState state = { 0 };
     // For G-buffer
     if (res)
     {
@@ -3184,10 +3185,41 @@ bool Renderer::CreateTerrainGeometry()
         BaseRenderer::GeometryState* pState = new BaseRenderer::GeometryState();
         res = CreateGeometryState(zParams, *pState);
 
-        Platform::ZPassState state = { 0 };
         state.states[Platform::ZPassGBuffer] = pState;
-        m_pTerrainModel->zPassGeomStates.push_back(state);
     }
+
+    // For Z-Prepass
+    if (res)
+    {
+        BaseRenderer::GeometryStateParams zParams = params;
+        zParams.pShaderSourceName = _T("ZPass.hlsl");
+        zParams.shaderDefines.clear();
+        zParams.shaderDefines.push_back("NORMAL_MAP");
+        zParams.geomStaticTexturesCount = 4;
+        zParams.blendState.RenderTarget[0].BlendEnable = FALSE;
+
+        BaseRenderer::GeometryState* pState = new BaseRenderer::GeometryState();
+        res = CreateGeometryState(zParams, *pState);
+        if (res)
+        {
+            state.states[Platform::ZPassTypeSimple] = pState;
+        }
+        if (res)
+        {
+            pState = new BaseRenderer::GeometryState();
+            zParams.rasterizerState.DepthBias = 32;
+            res = CreateGeometryState(zParams, *pState);
+            state.states[Platform::ZPassTypeBias] = pState;
+        }
+        if (res)
+        {
+            pState = new BaseRenderer::GeometryState();
+            zParams.rasterizerState.SlopeScaledDepthBias = sqrtf(2.0f) * 2.0f;
+            res = CreateGeometryState(zParams, *pState);
+            state.states[Platform::ZPassTypeBiasSlopeScale] = pState;
+        }
+    }
+    m_pTerrainModel->zPassGeomStates.push_back(state);
 
     return res;
 }

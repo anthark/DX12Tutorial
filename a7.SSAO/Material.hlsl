@@ -16,6 +16,8 @@ Texture2D NormalMapTexture : register(t34);
 Texture2D EmissiveMapTexture : register(t35);
 #endif // EMISSIVE_MAP
 
+#include "Directions.h"
+
 struct VSOut
 {
     float4 pos : SV_POSITION;
@@ -96,12 +98,6 @@ VSOut VS(float3 pos : POSITION, float3 normal : NORMAL, float2 uv : TEXCOORD
     return output;
 }
 
-struct Dirs
-{
-float3 n;
-float3 v;
-};
-
 struct PSOut
 {
     float4 color : SV_TARGET0;
@@ -109,24 +105,6 @@ struct PSOut
     float4 emissive : SV_TARGET1;
 #endif // NO_BLOOM
 };
-
-Dirs CalcDirs(in float3 inNormal, in float2 uv, in float4 inTangent, in float3 worldPos)
-{
-    float3 normal = normalize(inNormal);
-#ifdef NORMAL_MAP
-    float3 texNormal = (NormalMapTexture.Sample(MinMagMipLinear, uv).xyz - 0.5) * 2.0;
-    float3 tangent = normalize(inTangent.xyz);
-    float3 binormal = normalize(cross(normal, tangent));
-    binormal = -(binormal * sign(inTangent.w)); // Mirror binormal as we already mirrored source vectors for cross product
-    normal = normalize(texNormal.x * tangent + texNormal.y * binormal + texNormal.z * normal);
-#endif // NORMAL_MAP
-
-    Dirs d;
-    d.n = normal;
-    d.v = normalize(cameraPos.xyz - worldPos);
-
-    return d;
-}
 
 #ifdef KHR_SPECGLOSS
 
