@@ -4415,7 +4415,7 @@ bool Renderer::SSAOMaskGeneration()
             D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
             D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
 
-            GetDevice()->AllocateDynamicDescriptors(1, cpuHandle, gpuHandle);
+            GetDevice()->AllocateDynamicDescriptors(2, cpuHandle, gpuHandle);
 
             // Setup src texture
             D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
@@ -4425,9 +4425,15 @@ bool Renderer::SSAOMaskGeneration()
             srvDesc.Texture2D.MipLevels = 1;
             GetDevice()->GetDXDevice()->CreateShaderResourceView(GetDepthBuffer().pResource, &srvDesc, cpuHandle);
 
-            //cpuHandle.ptr += GetDevice()->GetSRVDescSize();
+            cpuHandle.ptr += GetDevice()->GetSRVDescSize();
 
-            // TODO Normals will be source textures here
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            srvDesc.Format = m_GBufferNormalRT.pResource->GetDesc().Format;
+            srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+            srvDesc.Texture2D.MipLevels = 1;
+            GetDevice()->GetDXDevice()->CreateShaderResourceView(m_GBufferNormalRT.pResource, &srvDesc, cpuHandle);
+
+            // Normals texture is source texture here
             GetCurrentCommandList()->SetGraphicsRootDescriptorTable(3, gpuHandle);
         }
         if (res)
