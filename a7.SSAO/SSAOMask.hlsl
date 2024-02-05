@@ -34,11 +34,11 @@ VSOut VS(float2 pos : POSITION, float2 uv : TEXCOORD)
     return output;
 }
 
-float4 PS(VSOut input) : SV_TARGET
+float BasicOcclusion(float2 uv, float2 pos)
 {
-    float depth = DepthTexture.Sample(NoMipSampler, input.uv).x;
+    float depth = DepthTexture.Sample(NoMipSampler, uv).x;
 
-    float4 ndc = float4(PixelToNDC(input.pos.xy).xy, depth, 1);
+    float4 ndc = float4(PixelToNDC(pos).xy, depth, 1);
     float4 homoViewPos = mul(invVP, ndc);
     float3 viewPos = homoViewPos.xyz / homoViewPos.w;
 
@@ -57,7 +57,28 @@ float4 PS(VSOut input) : SV_TARGET
 		}
 	}
 	
-	float maskValue = (float)occlusion / sampleCount.x;
+	return (float)occlusion;
+}
+
+float HalfSphereOcclusion(float2 uv)
+{
+	float3 normal = normalize(Normals.Sample(NoMipSampler, uv).xyz * 2.0 - 1.0);
+
+	float depth = DepthTexture.Sample(NoMipSampler, uv).x;
+}
+
+float4 PS(VSOut input) : SV_TARGET
+{
+	float occlusion = 0.0;
+
+	switch (ssaoMode)
+	{
+		case 0: // Basic
+			occlusion = BasicOcclusion(input.uv, input.pos.xy);
+			break;
+	}
+
+    float maskValue = (float)occlusion / sampleCount.x;
 
     return float4(maskValue, maskValue, maskValue, 1.0);
 }

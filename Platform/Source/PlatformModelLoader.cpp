@@ -313,9 +313,10 @@ void GLTFModelInstance::SetupTransform()
     }
 }
 
-ModelLoader::ModelLoader()
+ModelLoader::ModelLoader(bool zPassNormals)
     : m_pRenderer(nullptr)
     , m_modelLoadState()
+    , m_zPassNormals(zPassNormals)
 {
 }
 
@@ -973,7 +974,7 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
                 }
                 zParams.geomStaticTexturesCount = 1;
                 zParams.blendState.RenderTarget[0].BlendEnable = FALSE;
-                zParams.rtFormat = DXGI_FORMAT_UNKNOWN;
+                zParams.rtFormat = m_zPassNormals ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_UNKNOWN;
                 zParams.rtFormat2 = DXGI_FORMAT_UNKNOWN;
 
                 ZPassState state;

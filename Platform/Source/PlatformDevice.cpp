@@ -848,12 +848,6 @@ bool Device::CompileShader(LPCTSTR srcFilename, const std::vector<LPCSTR>& defin
 {
     std::vector<char> data;
 
-    // AAV TEMP
-    if (srcFilename == L"Material.hlsl")
-    {
-        int h = 0;
-    }
-
     bool res = ReadFileContent(srcFilename, data);
     if (res)
     {

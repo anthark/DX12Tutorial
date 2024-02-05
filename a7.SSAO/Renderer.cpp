@@ -72,6 +72,7 @@ const float BaseLow = 0.01f;
 const std::vector<const char*> SceneGeometryTypeNames = {"Single object", "Objects grid"};
 const std::vector<const char*> RenderModeNames = { "Lighting", "SSAO Mask" };
 const std::vector<const char*> ShadowMapModeNames = { "Simple", "PSSM", "CSM" };
+const std::vector<const char*> SSAOModeNames = { "Basic", "Half sphere", "Half sphere + noise", "Half sphere + noise, blur" };
 
 float RandFloat(float minValue, float maxValue)
 {
@@ -183,6 +184,7 @@ SceneParameters::SceneParameters()
     , deferredLightsTest(false)
     , animated(true)
     , showGPUCounters(false)
+    , ssaoMode(SSAOBasic)
 {
     showMenu = true;
 
@@ -679,7 +681,7 @@ bool Renderer::Init(HWND hWnd)
 
         if (res)
         {
-            m_pModelLoader = new Platform::ModelLoader();
+            m_pModelLoader = new Platform::ModelLoader(true);
             std::vector<std::tstring> modelFiles = Platform::ScanDirectories(_T("../Common/SceneModels"), _T("scene.gltf"));
             //std::vector<std::tstring> modelFiles;
             res = m_pModelLoader->Init(this, modelFiles, HDRFormat, DXGI_FORMAT_R32G32B32A32_FLOAT, true, false);
@@ -687,7 +689,7 @@ bool Renderer::Init(HWND hWnd)
 
         if (res)
         {
-            m_pPlayerModelLoader = new Platform::ModelLoader();
+            m_pPlayerModelLoader = new Platform::ModelLoader(true);
             std::vector<std::tstring> modelFiles = Platform::ScanDirectories(_T("../Common/PlayerModels"), _T("scene.gltf"));
             m_pPlayerModelLoader->Init(this, modelFiles, HDRFormat, DXGI_FORMAT_R32G32B32A32_FLOAT, true, UseLocalCubemaps);
         }
@@ -1048,9 +1050,13 @@ bool Renderer::Render()
                 {
                     GetCurrentCommandList()->OMSetRenderTargets(1, &m_GBufferNormalRTV, TRUE, &dsvHandle);
 
+                    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_GBufferNormalRT.pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
                     ForwardPlusRenderDepthPrepass();
+                    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_GBufferNormalRT.pResource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
                     if (m_sceneParams.renderArch == SceneParameters::ForwardPlus)
                     {
+                        LightCulling();
                         LightCulling();
                     }
                 }
@@ -1320,6 +1326,7 @@ bool Renderer::Render()
                         ImGui::Begin("SSAO");
                         ImGui::SliderFloat("Kernel radius", &m_sceneParams.ssaoKernelRadius, 0.1f, 2.0f);
                         ImGui::SliderInt("Kernel samples", &m_sceneParams.ssaoSamplesCount, 16, 512);
+                        ImGui::ListBox("Mode", (int*)&m_sceneParams.ssaoMode, SSAOModeNames.data(), (int)SSAOModeNames.size());
                         ImGui::End();
                     }
 
@@ -3197,6 +3204,7 @@ bool Renderer::CreateTerrainGeometry()
         zParams.shaderDefines.push_back("NORMAL_MAP");
         zParams.geomStaticTexturesCount = 4;
         zParams.blendState.RenderTarget[0].BlendEnable = FALSE;
+        zParams.rtFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
         BaseRenderer::GeometryState* pState = new BaseRenderer::GeometryState();
         res = CreateGeometryState(zParams, *pState);
@@ -3302,7 +3310,7 @@ bool Renderer::CreatePlayerSphereGeometry()
 
         zParams.geomStaticTexturesCount = 1;
         zParams.blendState.RenderTarget[0].BlendEnable = FALSE;
-        zParams.rtFormat = DXGI_FORMAT_UNKNOWN;
+        zParams.rtFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
         zParams.rtFormat2 = DXGI_FORMAT_UNKNOWN;
 
         Platform::ZPassState state;
@@ -3578,7 +3586,8 @@ void Renderer::LoadScene(Platform::ModelLoader* pSceneModelLoader)
             }
         }
 
-        UINT32 lightCount = 0;
+        // We don't want to use any local lights in this scenario, as they interfere with SSAO effect for our ambient lighting
+        /*UINT32 lightCount = 0;
         fread(&lightCount, sizeof(lightCount), 1, pFile);
 
         for (UINT32 i = 0; i < lightCount; i++)
@@ -3601,7 +3610,7 @@ void Renderer::LoadScene(Platform::ModelLoader* pSceneModelLoader)
             fread(&lightAnim.phase, sizeof(lightAnim.phase), 1, pFile);
             fread(&lightAnim.period, sizeof(lightAnim.period), 1, pFile);
             fread(&lightAnim.amplitude, sizeof(lightAnim.amplitude), 1, pFile);
-        }
+        }*/
     }
 
     fclose(pFile);
@@ -4404,7 +4413,8 @@ bool Renderer::SSAOMaskGeneration()
 
             pSSAOMaskParams->sampleCount.x = m_sceneParams.ssaoSamplesCount;
             pSSAOMaskParams->ssaoParams.x = m_sceneParams.ssaoKernelRadius;
-            GenerateSSAOKernel(pSSAOMaskParams->samples, m_sceneParams.ssaoSamplesCount);
+            pSSAOMaskParams->ssaoMode = (int)m_sceneParams.ssaoMode;
+            GenerateSSAOKernel(pSSAOMaskParams->samples, m_sceneParams.ssaoSamplesCount, m_sceneParams.ssaoMode != SceneParameters::SSAOBasic);
 
             GetCurrentCommandList()->SetGraphicsRootConstantBufferView(1, cbAddress);
         }
@@ -4456,7 +4466,7 @@ float Renderer::Random(float minVal, float maxVal)
     return (maxVal - minVal) * (float)rand() / RAND_MAX + minVal;
 }
 
-void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount)
+void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, bool halfSphere)
 {
     srand(12345);
 
@@ -4465,7 +4475,7 @@ void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount)
         Point4f s(
             Random(-1.0f, 1.0f),
             Random(-1.0f, 1.0f),
-            Random(-1.0f, 1.0f),
+            halfSphere ? Random(0.0f, 1.0f) : Random(-1.0f, 1.0f),
             0.0f
         );
         s.normalize();

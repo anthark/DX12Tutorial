@@ -164,7 +164,7 @@ private:
 class PLATFORM_API ModelLoader
 {
 public:
-    ModelLoader();
+    ModelLoader(bool zPassNormals = false);
     virtual ~ModelLoader();
 
     bool Init(BaseRenderer* pRenderer, const std::vector<std::tstring>& modelFiles, const DXGI_FORMAT hdrFormat, const DXGI_FORMAT cubeHDRFormat, bool forDeferred, bool useLocalCubemaps);
@@ -215,6 +215,7 @@ private:
     DXGI_FORMAT m_cubeHDRFormat;
     bool m_useLocalCubemaps;
     bool m_forDeferred;
+    bool m_zPassNormals;
 
     ModelLoadState m_modelLoadState;
 

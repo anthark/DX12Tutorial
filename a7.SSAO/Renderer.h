@@ -48,6 +48,14 @@ struct SceneParameters
         ShadowModeCSM
     };
 
+    enum SSAOMode
+    {
+        SSAOBasic = 0,
+        SSAOHalfSphere,
+        SSAOHalfSphereNoise,
+        SSAOHalfSphereNoiseBlur
+    };
+
     struct LightParam
     {
         int lightType;
@@ -88,6 +96,7 @@ struct SceneParameters
     // SSAO setup
     int ssaoSamplesCount;
     float ssaoKernelRadius;
+    SSAOMode ssaoMode;
 
     bool animated;
     bool showGPUCounters;
@@ -278,7 +287,7 @@ private:
     bool SSAOMaskGeneration();
 
     float Random(float minVal, float maxVal);
-    void GenerateSSAOKernel(Point4f* pSamples, int sampleCount);
+    void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, bool halfSphere);
 
 private:
     std::vector<Platform::GLTFGeometry> m_serviceGeometries;
