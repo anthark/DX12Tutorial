@@ -286,6 +286,7 @@ private:
     void DrawCounters();
 
     bool SSAOMaskGeneration();
+    bool SSAOMaskBlur();
 
     float Random(float minVal, float maxVal);
     void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere);
@@ -300,6 +301,7 @@ private:
     D3D12_CPU_DESCRIPTOR_HANDLE m_hdrSRVCpu;
 
     Platform::GPUResource m_ssaoMaskRT;
+    Platform::GPUResource m_ssaoMaskRTBlur;
     D3D12_CPU_DESCRIPTOR_HANDLE m_ssaoMaskRTV;
     D3D12_GPU_DESCRIPTOR_HANDLE m_ssaoMaskSRV;
 
@@ -341,6 +343,8 @@ private:
     ID3D12RootSignature* m_pLuminanceFinalRS;
     ID3D12PipelineState* m_pComputeBlurHorzPSO;
     ID3D12PipelineState* m_pComputeBlurVertPSO;
+    ID3D12PipelineState* m_pComputeBlurHorz4PSO;
+    ID3D12PipelineState* m_pComputeBlurVert4PSO;
     ID3D12RootSignature* m_pComputeBlurRS;
     Platform::GPUResource m_tonemapParams;
 

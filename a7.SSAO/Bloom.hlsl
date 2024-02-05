@@ -116,15 +116,25 @@ cbuffer ComputeGaussBlurCB : register (b0)
 RWTexture2D<float4> dstTexture : register(u0);
 
 static const int BlurGroupSize = 64;
+#ifdef GAUSS_BLUR_COMPUTE_SIZE_4
+static const int BlurSize = 5;
+#else
 static const int BlurSize = 7;
+#endif
 static const int HalfBlurSize = (BlurSize - 1) / 2;
 
 [numthreads( BlurGroupSize, 1, 1 )]
-void CS( uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID )
+void CS( uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID)
 {
     float4 curSum = float4(0,0,0,0);
 
 #ifdef GAUSS_BLUR_COMPUTE_HORZ
+    int y = groupId.y * BlurGroupSize + threadId.x;
+    if (y > cgbImageSize.y)
+    {
+        return;
+    }
+
     for (int i = -HalfBlurSize; i <= HalfBlurSize; i++)
     {
         int2 pixCoord = clamp(int2(groupId.x * BlurGroupSize + i, groupId.y * BlurGroupSize + threadId.x), int2(0,0), cgbImageSize);
@@ -145,6 +155,12 @@ void CS( uint3 groupId : SV_GroupID, uint3 threadId : SV_GroupThreadID )
 #endif // GAUSS_BLUR_COMPUTE_HORZ
 
 #ifdef GAUSS_BLUR_COMPUTE_VERT
+    int x = groupId.x * BlurGroupSize + threadId.x;
+    if (x > cgbImageSize.x)
+    {
+        return;
+    }
+
     for (int i = -HalfBlurSize; i <= HalfBlurSize; i++)
     {
         int2 pixCoord = clamp(int2(groupId.x * BlurGroupSize + threadId.x, groupId.y * BlurGroupSize + i), int2(0,0), cgbImageSize);

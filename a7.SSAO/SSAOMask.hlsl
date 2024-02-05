@@ -129,6 +129,7 @@ float4 PS(VSOut input) : SV_TARGET
 			break;
 
 		case 2: // Half sphere + noise
+		case 3: // Half sphere + noise, + blur
 			occlusion = HalfSphereOcclusionNoise(input.uv, input.pos.xy);
 			break;
 	}

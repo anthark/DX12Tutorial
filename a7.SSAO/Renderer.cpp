@@ -2405,6 +2405,7 @@ bool Renderer::CreateSSAOTextures()
     params.height = height;
     params.width = width;
     params.enableRT = true;
+    params.enableUAV = true;
     params.initialState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
     D3D12_CLEAR_VALUE clearValue;
@@ -2413,6 +2414,10 @@ bool Renderer::CreateSSAOTextures()
     params.pOptimizedClearValue = &clearValue;
 
     bool res = Platform::CreateTexture(params, false, GetDevice(), m_ssaoMaskRT);
+    if (res)
+    {
+        res = Platform::CreateTexture(params, false, GetDevice(), m_ssaoMaskRTBlur);
+    }
 
     if (res)
     {
@@ -2446,6 +2451,7 @@ bool Renderer::CreateSSAOTextures()
 void Renderer::DestroySSAOTextures()
 {
     GetDevice()->ReleaseGPUResource(m_ssaoMaskRT);
+    GetDevice()->ReleaseGPUResource(m_ssaoMaskRTBlur);
 }
 
 bool Renderer::CreateDeferredTextures()
@@ -2888,6 +2894,45 @@ bool Renderer::CreateComputePipeline()
     }
     D3D_RELEASE(pComputeShaderBinary);
 
+    if (res)
+    {
+        // Create shader
+        res = GetDevice()->CompileShader(_T("Bloom.hlsl"), { "GAUSS_BLUR_COMPUTE", "GAUSS_BLUR_COMPUTE_HORZ", "GAUSS_BLUR_COMPUTE_SIZE_4" }, Platform::Device::Compute, &pComputeShaderBinary);
+    }
+    if (res)
+    {
+        // Describe and create the graphics pipeline state object (PSO).
+        D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature = m_pComputeBlurRS;
+        psoDesc.CS = CD3DX12_SHADER_BYTECODE(pComputeShaderBinary);
+
+        ID3D12Device* pDevice = GetDevice()->GetDXDevice();
+        HRESULT hr = S_OK;
+        D3D_CHECK(pDevice->CreateComputePipelineState(&psoDesc, __uuidof(ID3D12PipelineState), (void**)&m_pComputeBlurHorz4PSO));
+
+        res = SUCCEEDED(hr);
+    }
+    D3D_RELEASE(pComputeShaderBinary);
+    if (res)
+    {
+        // Create shader
+        res = GetDevice()->CompileShader(_T("Bloom.hlsl"), { "GAUSS_BLUR_COMPUTE", "GAUSS_BLUR_COMPUTE_VERT", "GAUSS_BLUR_COMPUTE_SIZE_4" }, Platform::Device::Compute, &pComputeShaderBinary);
+    }
+    if (res)
+    {
+        // Describe and create the graphics pipeline state object (PSO).
+        D3D12_COMPUTE_PIPELINE_STATE_DESC psoDesc = {};
+        psoDesc.pRootSignature = m_pComputeBlurRS;
+        psoDesc.CS = CD3DX12_SHADER_BYTECODE(pComputeShaderBinary);
+
+        ID3D12Device* pDevice = GetDevice()->GetDXDevice();
+        HRESULT hr = S_OK;
+        D3D_CHECK(pDevice->CreateComputePipelineState(&psoDesc, __uuidof(ID3D12PipelineState), (void**)&m_pComputeBlurVert4PSO));
+
+        res = SUCCEEDED(hr);
+    }
+    D3D_RELEASE(pComputeShaderBinary);
+
     // Min-Max depth calculation
     if (res)
     {
@@ -2958,6 +3003,8 @@ void Renderer::DestroyComputePipeline()
 {
     GetDevice()->ReleaseGPUResource(m_tonemapParams);
 
+    D3D_RELEASE(m_pComputeBlurHorz4PSO);
+    D3D_RELEASE(m_pComputeBlurVert4PSO);
     D3D_RELEASE(m_pComputeBlurHorzPSO);
     D3D_RELEASE(m_pComputeBlurVertPSO);
     D3D_RELEASE(m_pComputeBlurRS);
@@ -4460,9 +4507,115 @@ bool Renderer::SSAOMaskGeneration()
         res = GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     }
 
+    if (res && m_sceneParams.ssaoMode == SceneParameters::SSAOHalfSphereNoiseBlur)
+    {
+        res = SSAOMaskBlur();
+    }
+
     //m_counters[(size_t)CounterType::Tonemapping].second.Stop(GetCurrentCommandList());
 
     return res;
+}
+
+bool Renderer::SSAOMaskBlur()
+{
+    GetCurrentCommandList()->SetPipelineState(m_pComputeBlurHorz4PSO);
+    GetCurrentCommandList()->SetComputeRootSignature(m_pComputeBlurRS);
+
+    D3D12_CPU_DESCRIPTOR_HANDLE cpuHandle;
+    D3D12_GPU_DESCRIPTOR_HANDLE gpuHandle;
+
+    GetDevice()->AllocateDynamicDescriptors(3, cpuHandle, gpuHandle);
+
+    // Setup constant buffer with parameters
+    Point2i* pImageSize = nullptr;
+    UINT64 paramsGPUAddress;
+    GetDevice()->AllocateDynamicBuffer(sizeof(LuminanceFinalParams), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT, (void**)&pImageSize, paramsGPUAddress);
+
+    RECT rect{
+        0, 0,
+        (LONG)m_ssaoMaskRT.pResource->GetDesc().Width,
+        (LONG)m_ssaoMaskRT.pResource->GetDesc().Height
+    };
+    Point2i imageSize = Point2i{ rect.right - rect.left, rect.bottom - rect.top };
+    *pImageSize = imageSize;
+
+    D3D12_CONSTANT_BUFFER_VIEW_DESC cbvDesc = {};
+    cbvDesc.BufferLocation = paramsGPUAddress;
+    cbvDesc.SizeInBytes = Align((int)sizeof(Point2i), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    GetDevice()->GetDXDevice()->CreateConstantBufferView(&cbvDesc, cpuHandle);
+
+    cpuHandle.ptr += GetDevice()->GetSRVDescSize();
+
+    // Setup src texture
+    D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_ssaoMaskRT.pResource->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    GetDevice()->GetDXDevice()->CreateShaderResourceView(m_ssaoMaskRT.pResource, &srvDesc, cpuHandle);
+
+    cpuHandle.ptr += GetDevice()->GetSRVDescSize();
+
+    // Setup dst buffer
+    D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+    uavDesc.Format = m_ssaoMaskRTBlur.pResource->GetDesc().Format;
+    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    uavDesc.Texture2D.MipSlice = 0;
+    uavDesc.Texture2D.PlaneSlice = 0;
+    GetDevice()->GetDXDevice()->CreateUnorderedAccessView(m_ssaoMaskRTBlur.pResource, nullptr, &uavDesc, cpuHandle);
+
+    // Set parameters
+    GetCurrentCommandList()->SetComputeRootDescriptorTable(0, gpuHandle);
+
+    UINT groupsX = DivUp((UINT)(rect.right - rect.left), 64U);
+    UINT groupsY = DivUp((UINT)(rect.bottom - rect.top), 64U);
+
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRTBlur.pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    GetCurrentCommandList()->Dispatch(groupsX, groupsY, 1);
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRTBlur.pResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    // Second (vertical) step
+    GetDevice()->AllocateDynamicDescriptors(3, cpuHandle, gpuHandle);
+
+    GetCurrentCommandList()->SetPipelineState(m_pComputeBlurVert4PSO);
+    GetCurrentCommandList()->SetComputeRootSignature(m_pComputeBlurRS);
+
+    // Setup constant buffer with parameters
+    cbvDesc.BufferLocation = paramsGPUAddress;
+    cbvDesc.SizeInBytes = Align((int)sizeof(Point2i), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+    GetDevice()->GetDXDevice()->CreateConstantBufferView(&cbvDesc, cpuHandle);
+
+    cpuHandle.ptr += GetDevice()->GetSRVDescSize();
+
+    // Setup src texture
+    srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srvDesc.Format = m_ssaoMaskRTBlur.pResource->GetDesc().Format;
+    srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srvDesc.Texture2D.MipLevels = 1;
+    GetDevice()->GetDXDevice()->CreateShaderResourceView(m_ssaoMaskRTBlur.pResource, &srvDesc, cpuHandle);
+
+    cpuHandle.ptr += GetDevice()->GetSRVDescSize();
+
+    // Setup dst buffer
+    uavDesc.Format = m_ssaoMaskRT.pResource->GetDesc().Format;
+    uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+    uavDesc.Texture2D.MipSlice = 0;
+    uavDesc.Texture2D.PlaneSlice = 0;
+    GetDevice()->GetDXDevice()->CreateUnorderedAccessView(m_ssaoMaskRT.pResource, nullptr, &uavDesc, cpuHandle);
+
+    // Set parameters
+    GetCurrentCommandList()->SetComputeRootDescriptorTable(0, gpuHandle);
+
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRTBlur.pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    GetCurrentCommandList()->Dispatch(groupsX, groupsY, 1);
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRTBlur.pResource, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    return true;
 }
 
 float Renderer::Random(float minVal, float maxVal)
