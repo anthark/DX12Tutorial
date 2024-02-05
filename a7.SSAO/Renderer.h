@@ -95,6 +95,7 @@ struct SceneParameters
 
     // SSAO setup
     int ssaoSamplesCount;
+    int ssaoNoiseSize;
     float ssaoKernelRadius;
     SSAOMode ssaoMode;
 
@@ -287,7 +288,7 @@ private:
     bool SSAOMaskGeneration();
 
     float Random(float minVal, float maxVal);
-    void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, bool halfSphere);
+    void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere);
 
 private:
     std::vector<Platform::GLTFGeometry> m_serviceGeometries;

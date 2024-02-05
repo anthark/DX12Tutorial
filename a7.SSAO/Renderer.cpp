@@ -184,6 +184,9 @@ SceneParameters::SceneParameters()
     , deferredLightsTest(false)
     , animated(true)
     , showGPUCounters(false)
+    , ssaoSamplesCount(128)
+    , ssaoKernelRadius(1.69f)
+    , ssaoNoiseSize(4)
     , ssaoMode(SSAOBasic)
 {
     showMenu = true;
@@ -215,9 +218,6 @@ SceneParameters::SceneParameters()
     shadowSplitsDist[1] = 33.0f;
     shadowSplitsDist[2] = 100.0f;
     shadowSplitsDist[3] = 300.0f;
-
-    ssaoSamplesCount = 128;
-    ssaoKernelRadius = 1.69f;
 }
 
 int SceneParameters::AddRandomLight()
@@ -4412,10 +4412,13 @@ bool Renderer::SSAOMaskGeneration()
 
             pSSAOMaskParams->invVP = GetCamera()->CalcProjMatrix(aspectRatioHdivW).Inverse();
 
-            pSSAOMaskParams->sampleCount.x = m_sceneParams.ssaoSamplesCount;
+            pSSAOMaskParams->ssaoSampleCount.x = m_sceneParams.ssaoSamplesCount;
             pSSAOMaskParams->ssaoParams.x = m_sceneParams.ssaoKernelRadius;
             pSSAOMaskParams->ssaoMode = (int)m_sceneParams.ssaoMode;
-            GenerateSSAOKernel(pSSAOMaskParams->samples, m_sceneParams.ssaoSamplesCount, m_sceneParams.ssaoMode != SceneParameters::SSAOBasic);
+            pSSAOMaskParams->ssaoNoiseSize = m_sceneParams.ssaoNoiseSize;
+            GenerateSSAOKernel(pSSAOMaskParams->ssaoSamples, m_sceneParams.ssaoSamplesCount,
+                pSSAOMaskParams->ssaoNoise, m_sceneParams.ssaoNoiseSize,
+                m_sceneParams.ssaoMode != SceneParameters::SSAOBasic);
 
             GetCurrentCommandList()->SetGraphicsRootConstantBufferView(1, cbAddress);
         }
@@ -4467,7 +4470,7 @@ float Renderer::Random(float minVal, float maxVal)
     return (maxVal - minVal) * (float)rand() / RAND_MAX + minVal;
 }
 
-void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, bool halfSphere)
+void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere)
 {
     srand(12345);
 
@@ -4488,5 +4491,21 @@ void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, bool halfS
         s = s * scale;
 
         pSamples[i] = s;
+    }
+
+    srand(12345);
+
+    for (int j = 0; j < noiseSize; j++)
+    {
+        for (int i = 0; i < noiseSize; i++)
+        {
+            Point4f s(
+                Random(-1.0f, 1.0f),
+                Random(-1.0f, 1.0f),
+                0.0f, 0.0f
+            );
+            s.normalize();
+            pNoise[j*noiseSize + i] = s;
+        }
     }
 }
