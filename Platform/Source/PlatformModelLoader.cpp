@@ -972,7 +972,18 @@ bool ModelLoader::ScanNode(const tinygltf::Model& model, int nodeIdx, const std:
                 {
                     zParams.shaderDefines.push_back("SKINNED");
                 }
-                zParams.geomStaticTexturesCount = 1;
+                if (m_zPassNormals)
+                {
+                    if (normalMap)
+                    {
+                        zParams.shaderDefines.push_back("NORMAL_MAP");
+                    }
+                    zParams.geomStaticTexturesCount = 3;
+                }
+                else
+                {
+                    zParams.geomStaticTexturesCount = 1;
+                }
                 zParams.blendState.RenderTarget[0].BlendEnable = FALSE;
                 zParams.rtFormat = m_zPassNormals ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_UNKNOWN;
                 zParams.rtFormat2 = DXGI_FORMAT_UNKNOWN;

@@ -59,6 +59,17 @@ Matrix4f Camera::CalcViewMatrix() const
     return CalcInverseViewMatrix().Inverse();
 }
 
+Matrix4f Camera::CalcViewMatrixNoTrans() const
+{
+    Point3f right, up, dir;
+    CalcDirection(right, up, dir);
+
+    Matrix4f view;
+    view.CoordTransformMatrix(right, up, dir, Point3f(0,0,0));
+
+    return view.Inverse();
+}
+
 Matrix4f Camera::CalcInverseViewMatrix() const
 {
     Point3f right, up, dir;

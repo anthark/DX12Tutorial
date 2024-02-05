@@ -52,6 +52,7 @@ public:
 
     Point4f CalcPos() const;
     Matrix4f CalcViewMatrix() const;
+    Matrix4f CalcViewMatrixNoTrans() const;
     Matrix4f CalcInverseViewMatrix() const;
     Matrix4f CalcProjMatrix(float aspectRatioHdivW) const;
     void CalcDirection(Point3f& right, Point3f& up, Point3f& dir) const;

@@ -3846,6 +3846,7 @@ void Renderer::PrepareColorPass(const Platform::Camera& camera, const D3D12_RECT
     pCommonCB->localCubemapGrid = Point4i(m_pCubemapBuilder->GetLocalParams().grid.x, m_pCubemapBuilder->GetLocalParams().grid.y, 0, 0);
     pCommonCB->inverseView = camera.CalcInverseViewMatrix();
     pCommonCB->inverseProj = camera.CalcProjMatrix(aspectRatioHdivW).Inverse();
+    pCommonCB->cameraViewNoTrans = camera.CalcViewMatrixNoTrans();
 
     // Setup lights data
     SetupLights(reinterpret_cast<Lights*>(dynCBData[1]));
