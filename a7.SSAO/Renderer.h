@@ -98,6 +98,7 @@ struct SceneParameters
     int ssaoNoiseSize;
     float ssaoKernelRadius;
     SSAOMode ssaoMode;
+    bool ssaoUseRange;
 
     bool animated;
     bool showGPUCounters;

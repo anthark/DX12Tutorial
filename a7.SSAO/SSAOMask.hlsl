@@ -17,6 +17,11 @@ float2 NDCToUV(float3 ndcCoord)
 {
     return float2(ndcCoord.x*0.5 + 0.5, -ndcCoord.y*0.5 + 0.5);
 }
+float NDCToDepth(float3 ndc)
+{
+    float4 homoViewPos = mul(invVP, float4(ndc, 1.0));
+    return homoViewPos.z / homoViewPos.w;
+}
 
 struct VSOut
 {
@@ -51,7 +56,7 @@ float BasicOcclusion(float2 uv, float2 pos)
 		float3 samplePosNDC = samplePosProj.xyz / samplePosProj.w;
 		float2 samplePosUV = NDCToUV(samplePosNDC);
 		float sampleDepth = DepthTexture.Sample(NoMipSampler, samplePosUV).x;
-		if (sampleDepth > samplePosNDC.z)
+		if (sampleDepth < samplePosNDC.z)
 		{
 			++occlusion;
 		}
@@ -87,9 +92,23 @@ float HalfSphereOcclusionBase(float2 uv, float2 pos, float3 rvec)
 		float3 samplePosNDC = samplePosProj.xyz / samplePosProj.w;
 		float2 samplePosUV = NDCToUV(samplePosNDC);
 		float sampleDepth = DepthTexture.Sample(NoMipSampler, samplePosUV).x;
-		if (sampleDepth > samplePosNDC.z)
+		if (ssaoUseRange)
 		{
-			++occlusion;
+			float sampleLinDepth = NDCToDepth(float3(samplePosNDC.xy, sampleDepth));
+			if (abs(sampleLinDepth - viewPos.z) < ssaoParams.x)
+			{
+				if (sampleDepth < samplePosNDC.z)
+				{
+					++occlusion;
+				}
+			}
+		}
+		else
+		{
+			if (sampleDepth < samplePosNDC.z)
+			{
+				++occlusion;
+			}
 		}
 	}
 	
@@ -134,7 +153,7 @@ float4 PS(VSOut input) : SV_TARGET
 			break;
 	}
 
-    float maskValue = (float)occlusion / ssaoSampleCount.x;
+    float maskValue = 1.0 - (float)occlusion / ssaoSampleCount.x;
 
     return float4(maskValue, maskValue, maskValue, 1.0);
 }

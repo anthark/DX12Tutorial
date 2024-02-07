@@ -116,8 +116,8 @@ cbuffer ComputeGaussBlurCB : register (b0)
 RWTexture2D<float4> dstTexture : register(u0);
 
 static const int BlurGroupSize = 64;
-#ifdef GAUSS_BLUR_COMPUTE_SIZE_4
-static const int BlurSize = 5;
+#ifdef GAUSS_BLUR_COMPUTE_SIZE_3
+static const int BlurSize = 3;
 #else
 static const int BlurSize = 7;
 #endif

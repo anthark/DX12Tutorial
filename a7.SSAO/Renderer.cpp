@@ -96,6 +96,7 @@ enum class CounterType
     ShadowMap = 0,
     DepthPrepass,
     LightCulling,
+    SSAOMask,
     DeferredGBuffer,
     DeferredLightPass,
     OpaqueColorPass,
@@ -184,10 +185,11 @@ SceneParameters::SceneParameters()
     , deferredLightsTest(false)
     , animated(true)
     , showGPUCounters(false)
-    , ssaoSamplesCount(128)
-    , ssaoKernelRadius(1.69f)
+    , ssaoSamplesCount(32)
+    , ssaoKernelRadius(0.25f)
     , ssaoNoiseSize(4)
     , ssaoMode(SSAOBasic)
+    , ssaoUseRange(false)
 {
     showMenu = true;
 
@@ -339,6 +341,7 @@ bool Renderer::Init(HWND hWnd)
         m_counters[(size_t)CounterType::ShadowMap           ] = std::make_pair(_T("Shadow map            "), Platform::DeviceTimeQuery(GetDevice()));
         m_counters[(size_t)CounterType::DepthPrepass        ] = std::make_pair(_T("Depth prepass         "), Platform::DeviceTimeQuery(GetDevice()));
         m_counters[(size_t)CounterType::LightCulling        ] = std::make_pair(_T("Light culling         "), Platform::DeviceTimeQuery(GetDevice()));
+        m_counters[(size_t)CounterType::SSAOMask            ] = std::make_pair(_T("SSAO mask             "), Platform::DeviceTimeQuery(GetDevice()));
         m_counters[(size_t)CounterType::DeferredGBuffer     ] = std::make_pair(_T("Deferred GBuffer      "), Platform::DeviceTimeQuery(GetDevice()));
         m_counters[(size_t)CounterType::DeferredLightPass   ] = std::make_pair(_T("Deferred light pass   "), Platform::DeviceTimeQuery(GetDevice()));
         m_counters[(size_t)CounterType::OpaqueColorPass     ] = std::make_pair(_T("Opaque color pass     "), Platform::DeviceTimeQuery(GetDevice()));
@@ -1327,6 +1330,7 @@ bool Renderer::Render()
                         ImGui::SliderFloat("Kernel radius", &m_sceneParams.ssaoKernelRadius, 0.1f, 2.0f);
                         ImGui::SliderInt("Kernel samples", &m_sceneParams.ssaoSamplesCount, 16, 512);
                         ImGui::ListBox("Mode", (int*)&m_sceneParams.ssaoMode, SSAOModeNames.data(), (int)SSAOModeNames.size());
+                        ImGui::Checkbox("Use range", &m_sceneParams.ssaoUseRange);
                         ImGui::End();
                     }
 
@@ -2897,7 +2901,7 @@ bool Renderer::CreateComputePipeline()
     if (res)
     {
         // Create shader
-        res = GetDevice()->CompileShader(_T("Bloom.hlsl"), { "GAUSS_BLUR_COMPUTE", "GAUSS_BLUR_COMPUTE_HORZ", "GAUSS_BLUR_COMPUTE_SIZE_4" }, Platform::Device::Compute, &pComputeShaderBinary);
+        res = GetDevice()->CompileShader(_T("Bloom.hlsl"), { "GAUSS_BLUR_COMPUTE", "GAUSS_BLUR_COMPUTE_HORZ", "GAUSS_BLUR_COMPUTE_SIZE_3" }, Platform::Device::Compute, &pComputeShaderBinary);
     }
     if (res)
     {
@@ -2916,7 +2920,7 @@ bool Renderer::CreateComputePipeline()
     if (res)
     {
         // Create shader
-        res = GetDevice()->CompileShader(_T("Bloom.hlsl"), { "GAUSS_BLUR_COMPUTE", "GAUSS_BLUR_COMPUTE_VERT", "GAUSS_BLUR_COMPUTE_SIZE_4" }, Platform::Device::Compute, &pComputeShaderBinary);
+        res = GetDevice()->CompileShader(_T("Bloom.hlsl"), { "GAUSS_BLUR_COMPUTE", "GAUSS_BLUR_COMPUTE_VERT", "GAUSS_BLUR_COMPUTE_SIZE_3" }, Platform::Device::Compute, &pComputeShaderBinary);
     }
     if (res)
     {
@@ -4409,6 +4413,7 @@ void Renderer::DrawCounters()
         (size_t)CounterType::ShadowMap,
         (size_t)CounterType::DepthPrepass,
         (size_t)CounterType::LightCulling,
+        (size_t)CounterType::SSAOMask,
         (size_t)CounterType::OpaqueColorPass,
         (size_t)CounterType::TransparentColorPass,
         (size_t)CounterType::Bloom,
@@ -4436,7 +4441,7 @@ bool Renderer::SSAOMaskGeneration()
 {
     PIX_MARKER_SCOPE(SSAOMask);
 
-    //m_counters[(size_t)CounterType::Tonemapping].second.Start(GetCurrentCommandList());
+    m_counters[(size_t)CounterType::SSAOMask].second.Start(GetCurrentCommandList());
 
     bool res = GetDevice()->TransitResourceState(GetCurrentCommandList(), m_ssaoMaskRT.pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_RENDER_TARGET);
     if (res)
@@ -4460,9 +4465,10 @@ bool Renderer::SSAOMaskGeneration()
             pSSAOMaskParams->invVP = GetCamera()->CalcProjMatrix(aspectRatioHdivW).Inverse();
 
             pSSAOMaskParams->ssaoSampleCount.x = m_sceneParams.ssaoSamplesCount;
-            pSSAOMaskParams->ssaoParams.x = m_sceneParams.ssaoKernelRadius;
+            pSSAOMaskParams->ssaoParams = m_sceneParams.ssaoKernelRadius;
             pSSAOMaskParams->ssaoMode = (int)m_sceneParams.ssaoMode;
             pSSAOMaskParams->ssaoNoiseSize = m_sceneParams.ssaoNoiseSize;
+            pSSAOMaskParams->ssaoUseRange = m_sceneParams.ssaoUseRange ? 1 : 0;
             GenerateSSAOKernel(pSSAOMaskParams->ssaoSamples, m_sceneParams.ssaoSamplesCount,
                 pSSAOMaskParams->ssaoNoise, m_sceneParams.ssaoNoiseSize,
                 m_sceneParams.ssaoMode != SceneParameters::SSAOBasic);
@@ -4512,7 +4518,7 @@ bool Renderer::SSAOMaskGeneration()
         res = SSAOMaskBlur();
     }
 
-    //m_counters[(size_t)CounterType::Tonemapping].second.Stop(GetCurrentCommandList());
+    m_counters[(size_t)CounterType::SSAOMask].second.Stop(GetCurrentCommandList());
 
     return res;
 }
