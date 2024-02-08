@@ -292,6 +292,8 @@ private:
     float Random(float minVal, float maxVal);
     void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere);
 
+    bool CreateParticleModel(Platform::GLTFModel** ppModel);
+
 private:
     std::vector<Platform::GLTFGeometry> m_serviceGeometries;
     std::vector<TestGeometry> m_cubemapTestGeometries;
@@ -390,6 +392,7 @@ private:
 
     std::vector<const Platform::GLTFModelInstance*> m_currentModels;// Current models to be drawn
 
+    Platform::GLTFModel* m_pParticleModel; // TEMP
     Platform::GLTFModel* m_pTerrainModel;
     Platform::GLTFModel* m_pSphereModel;
     Platform::GLTFModelInstance* m_pModelInstance;

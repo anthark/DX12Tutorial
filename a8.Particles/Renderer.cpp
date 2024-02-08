@@ -188,8 +188,8 @@ SceneParameters::SceneParameters()
     , ssaoSamplesCount(32)
     , ssaoKernelRadius(0.25f)
     , ssaoNoiseSize(4)
-    , ssaoMode(SSAOBasic)
-    , ssaoUseRange(false)
+    , ssaoMode(SSAOHalfSphereNoiseBlur)
+    , ssaoUseRange(true)
 {
     showMenu = true;
 
@@ -306,6 +306,7 @@ Renderer::~Renderer()
     assert(m_pModelLoader == nullptr);
     assert(m_pPlayerModelLoader == nullptr);
     assert(m_pTerrainModel == nullptr);
+    assert(m_pParticleModel == nullptr);
     assert(m_pSphereModel == nullptr);
     assert(m_pModelInstance == nullptr);
     assert(m_pFullScreenLight == nullptr);
@@ -458,6 +459,10 @@ bool Renderer::Init(HWND hWnd)
         if (res)
         {
             res = CreateTerrainGeometry();
+        }
+        if (res)
+        {
+            res = CreateParticleModel(&m_pParticleModel);
         }
         if (res)
         {
@@ -755,6 +760,10 @@ void Renderer::Term()
     m_pTerrainModel->Term(this);
     delete m_pTerrainModel;
     m_pTerrainModel = nullptr;
+
+    m_pParticleModel->Term(this);
+    delete m_pParticleModel;
+    m_pParticleModel = nullptr;
 
     m_pSphereModel->Term(this);
     delete m_pSphereModel;
@@ -1189,6 +1198,7 @@ bool Renderer::Render()
 
                     m_counters[(size_t)CounterType::TransparentColorPass].second.Start(GetCurrentCommandList());
 
+                    RenderModel(m_pParticleModel, false);
                     for (size_t i = 0; i < m_currentModels.size(); i++)
                     {
                         RenderModel(m_currentModels[i], false);
@@ -1325,14 +1335,14 @@ bool Renderer::Render()
                     }
 
                     // SSAO setup window
-                    {
+                    /*{
                         ImGui::Begin("SSAO");
                         ImGui::SliderFloat("Kernel radius", &m_sceneParams.ssaoKernelRadius, 0.1f, 2.0f);
                         ImGui::SliderInt("Kernel samples", &m_sceneParams.ssaoSamplesCount, 16, 512);
                         ImGui::ListBox("Mode", (int*)&m_sceneParams.ssaoMode, SSAOModeNames.data(), (int)SSAOModeNames.size());
                         ImGui::Checkbox("Use range", &m_sceneParams.ssaoUseRange);
                         ImGui::End();
-                    }
+                    }*/
 
                     // Only setup 0-index (directional) light
                     //for (int i = 0; i < m_sceneParams.activeLightCount; i++)
@@ -4667,4 +4677,90 @@ void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* p
             pNoise[j*noiseSize + i] = s;
         }
     }
+}
+
+bool Renderer::CreateParticleModel(Platform::GLTFModel** ppModel)
+{
+    Platform::GLTFModel* pNewModel = new Platform::GLTFModel;
+
+    struct ParticleVertex
+    {
+        Point3f pos;
+        Point2f uv;
+    };
+
+    Platform::GLTFGeometry* pGeometry = new Platform::GLTFGeometry();
+    pNewModel->blendGeometries.push_back(pGeometry);
+    pGeometry->splitData.flags.x = 0; // No shadow (for now)
+
+    std::vector<ParticleVertex> vertices(4);
+    std::vector<UINT16> indices(6);
+
+    vertices[0].pos = Point3f{ -0.25f, 0, 0 };
+    vertices[1].pos = Point3f{ 0.25f, 0, 0 };
+    vertices[2].pos = Point3f{ 0.25f, 1, 0 };
+    vertices[3].pos = Point3f{ -0.25f, 1, 0 };
+
+    vertices[0].uv = Point2f{ 0, 1 };
+    vertices[1].uv = Point2f{ 1, 1 };
+    vertices[2].uv = Point2f{ 1, 0 };
+    vertices[3].uv = Point2f{ 0, 0 };
+
+    indices[0] = 0;
+    indices[1] = 2;
+    indices[2] = 1;
+    indices[3] = 0;
+    indices[4] = 3;
+    indices[5] = 2;
+
+    CreateGeometryParams params;
+
+    params.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0 });
+    params.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 12 });
+
+    params.indexDataSize = (UINT)indices.size() * sizeof(UINT16);
+    params.indexFormat = DXGI_FORMAT_R16_UINT;
+    params.pIndices = indices.data();
+
+    params.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    params.pShaderSourceName = _T("Particle.hlsl");
+    params.pVertices = vertices.data();
+    params.vertexDataSize = (UINT)vertices.size() * sizeof(ParticleVertex);
+    params.vertexDataStride = sizeof(ParticleVertex);
+    params.rtFormat = HDRFormat;
+    params.rtFormat2 = HDRFormat;
+
+    params.blendState.RenderTarget[0].BlendEnable = TRUE;
+    params.blendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    params.blendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    params.blendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    params.blendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    params.blendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+    params.blendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
+
+    params.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+    Platform::GPUResource texture;
+    bool res = Platform::CreateTextureArrayFromFile(_T("../Common/Textures/Flame.png"), Point2i{16, 8}, GetDevice(), GetCurrentUploadCommandList(), texture);
+    if (res)
+    {
+        params.geomStaticTexturesCount = 1;
+        params.geomStaticTextures.push_back(texture.pResource);
+
+        res = CreateGeometry(params, *pGeometry);
+    }
+    if (res)
+    {
+        pNewModel->modelTextures.push_back(texture);
+
+        *ppModel = pNewModel;
+    }
+    else
+    {
+        pNewModel->Term(this);
+        delete pNewModel;
+        *ppModel = nullptr;
+    }
+
+    return res;
 }

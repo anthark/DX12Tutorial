@@ -146,6 +146,8 @@ protected:
 
     inline ShaderCache* GetShaderCache() const { return m_pShaderCache; }
 
+    inline ID3D12GraphicsCommandList* GetCurrentUploadCommandList() const { return m_pCurrentUploadCommandList; }
+
 private:
     bool CreateDepthBuffer();
     bool CreateGeometryBuffers(const CreateGeometryParams& params, Geometry& geometry);
@@ -155,6 +157,7 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE m_currentCommonTableStart;
 
     ID3D12GraphicsCommandList* m_pCurrentRenderCommandList;
+    ID3D12GraphicsCommandList* m_pCurrentUploadCommandList;
     ID3D12Resource* m_pCurrentBackBuffer;
     D3D12_CPU_DESCRIPTOR_HANDLE m_currentRTVHandle;
 

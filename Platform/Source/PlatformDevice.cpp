@@ -696,7 +696,7 @@ HRESULT Device::UpdateBuffer(ID3D12GraphicsCommandList* pCommandList, ID3D12Reso
     return E_FAIL;
 }
 
-HRESULT Device::UpdateTexture(ID3D12GraphicsCommandList* pCommandList, ID3D12Resource* pTexture, const void* pData, size_t dataSize)
+HRESULT Device::UpdateTexture(ID3D12GraphicsCommandList* pCommandList, ID3D12Resource* pTexture, const void* pData, size_t dataSize, UINT startingSubresource)
 {
     D3D12_RESOURCE_DESC desc = pTexture->GetDesc();
     assert(desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
@@ -706,7 +706,7 @@ HRESULT Device::UpdateTexture(ID3D12GraphicsCommandList* pCommandList, ID3D12Res
     std::vector<UINT64> rowSize(desc.MipLevels);
     std::vector<D3D12_PLACED_SUBRESOURCE_FOOTPRINT> placedFootprint(desc.MipLevels);
 
-    m_pDevice->GetCopyableFootprints(&desc, 0, desc.MipLevels, 0, placedFootprint.data(), numRows.data(), rowSize.data(), &total);
+    m_pDevice->GetCopyableFootprints(&desc, startingSubresource, desc.MipLevels, 0, placedFootprint.data(), numRows.data(), rowSize.data(), &total);
 
     assert(m_pCurrentUploadCmdList == pCommandList);
 
@@ -763,7 +763,7 @@ HRESULT Device::UpdateTexture(ID3D12GraphicsCommandList* pCommandList, ID3D12Res
 
         placedFootprint[i].Offset += allocStartOffset;
 
-        const auto& dst = CD3DX12_TEXTURE_COPY_LOCATION(pTexture, i);
+        const auto& dst = CD3DX12_TEXTURE_COPY_LOCATION(pTexture, startingSubresource + i);
         const auto& src = CD3DX12_TEXTURE_COPY_LOCATION(m_pUploadBuffer->GetBuffer(), placedFootprint[i]);
         pCommandList->CopyTextureRegion(
             &dst,

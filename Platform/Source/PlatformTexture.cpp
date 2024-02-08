@@ -147,12 +147,81 @@ bool CreateTextureFromFile(LPCTSTR filename, Device* pDevice, Platform::GPUResou
 
             GenerateMips(pBuffer, image, mips - 1);
 
-            HRESULT hr = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Tex2D(srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM, image.width, image.height, 1, mips), D3D12_RESOURCE_STATE_COMMON, nullptr, textureResource, pBuffer, dataSize);
+            bool res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Tex2D(srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM, image.width, image.height, 1, mips), D3D12_RESOURCE_STATE_COMMON, nullptr, textureResource, pBuffer, dataSize);
 
             delete[] pBuffer;
             pBuffer = nullptr;
 
-            return SUCCEEDED(hr);
+            return res;
+        }
+    }
+
+    return false;
+}
+
+bool CreateTextureArrayFromFile(LPCTSTR filename, const Point2i& grid, Device* pDevice, ID3D12GraphicsCommandList* pUploadCommandList, Platform::GPUResource& textureResource, bool srgb)
+{
+    std::vector<char> data;
+    if (Platform::ReadFileContent(filename, data))
+    {
+        png_image image;
+        memset(&image, 0, sizeof(png_image));
+        image.version = PNG_IMAGE_VERSION;
+
+        int pngRes = png_image_begin_read_from_memory(&image, &data[0], data.size());
+        assert(pngRes != 0);
+
+        if (pngRes != 0)
+        {
+            UINT initialDataSize = image.height * PNG_IMAGE_ROW_STRIDE(image) * PNG_IMAGE_PIXEL_SIZE(image.format);
+            UINT8* pBuffer = new UINT8[initialDataSize];
+            pngRes = png_image_finish_read(&image, NULL, pBuffer, 0, NULL);
+            UINT imagePitch = PNG_IMAGE_ROW_STRIDE(image);
+            UINT imagePixelSize = PNG_IMAGE_PIXEL_SIZE(image.format);
+
+            bool res = true;
+            if (pngRes != 0)
+            {
+                png_image imageTile = image;
+                imageTile.width /= grid.x;
+                imageTile.height /= grid.y;
+                UINT tilePitch = PNG_IMAGE_ROW_STRIDE(imageTile);
+
+                UINT mips = 0;
+                size_t tileDataSize = CalculateSizeWithMips(imageTile, mips);
+
+                res = pDevice->CreateGPUResource(
+                    CD3DX12_RESOURCE_DESC::Tex2D(srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM, imageTile.width, imageTile.height, grid.x * grid.y, mips), D3D12_RESOURCE_STATE_COMMON, nullptr, textureResource
+                );
+                if (res)
+                {
+                    UINT8* pTileBuffer = new UINT8[tileDataSize];
+                    for (int j = 0; j < grid.y && res; j++)
+                    {
+                        for (int i = 0; i < grid.x && res; i++)
+                        {
+                            const UINT8* pTileSrc = &pBuffer[j*imageTile.height*imagePitch + i * imageTile.width * imagePixelSize];
+                            UINT8* pTileDst = pTileBuffer;
+                            for (UINT k = 0; k < imageTile.height; k++)
+                            {
+                                memcpy(pTileDst, pTileSrc, tilePitch);
+                                pTileDst += tilePitch;
+                                pTileSrc += imagePitch;
+                            }
+                            GenerateMips(pTileBuffer, imageTile, mips - 1);
+
+                            res = SUCCEEDED(pDevice->UpdateTexture(pUploadCommandList, textureResource.pResource, pTileBuffer, tileDataSize, (j * grid.x + i) * mips));
+                        }
+                    }
+                    delete[] pTileBuffer;
+                    pTileBuffer = nullptr;
+                }
+            }
+
+            delete[] pBuffer;
+            pBuffer = nullptr;
+
+            return res;
         }
     }
 

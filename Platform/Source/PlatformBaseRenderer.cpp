@@ -22,6 +22,7 @@ BaseRenderer::BaseRenderer(Device* pDevice, UINT commonCBCount, UINT commonTexCo
     , m_pCurrentRootSignature(nullptr)
     , m_currentCommonTableStart{}
     , m_pCurrentRenderCommandList(nullptr)
+    , m_pCurrentUploadCommandList(nullptr)
     , m_pCurrentBackBuffer(nullptr)
     , m_currentRTVHandle{}
     , m_pDSVHeap(nullptr)
@@ -38,6 +39,7 @@ BaseRenderer::~BaseRenderer()
 {
     assert(m_pCurrentRootSignature == nullptr);
     assert(m_pCurrentRenderCommandList == nullptr);
+    assert(m_pCurrentUploadCommandList == nullptr);
     assert(m_pCurrentBackBuffer == nullptr);
     assert(m_pDSVHeap == nullptr);
     assert(m_pShaderCache == nullptr);
@@ -247,6 +249,10 @@ bool BaseRenderer::BeginGeometryCreation()
     {
         ID3D12GraphicsCommandList* pUploadCommandList = nullptr;
         res = GetDevice()->BeginUploadCommandList(&pUploadCommandList);
+        if (res)
+        {
+            m_pCurrentUploadCommandList = pUploadCommandList;
+        }
     }
 
     return res;
@@ -488,6 +494,8 @@ bool BaseRenderer::RenderScene(const Camera& camera)
 
 void BaseRenderer::EndGeometryCreation()
 {
+    m_pCurrentUploadCommandList = nullptr;
+
     GetDevice()->CloseUploadCommandList();
 }
 
