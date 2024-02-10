@@ -259,6 +259,21 @@ const Platform::CubemapBuilder::InitParams& Renderer::CubemapBuilderParams = {
     5       // Roughness mips
 };
 
+void ParticleModel::Term(Platform::BaseRenderer* pRenderer)
+{
+    for (auto geometry : geometries)
+    {
+        pRenderer->DestroyGeometry(*geometry);
+    }
+    geometries.clear();
+
+    for (auto texture : modelTextures)
+    {
+        pRenderer->GetDevice()->ReleaseGPUResource(texture);
+    }
+    modelTextures.clear();
+}
+
 Renderer::Renderer(Platform::Device* pDevice)
     : Platform::BaseRenderer(pDevice, 2, 32, { sizeof(SceneCommon), sizeof(Lights) }, 1 + ShadowSplits + 1)
     , CameraControlEuler()
@@ -1198,7 +1213,7 @@ bool Renderer::Render()
 
                     m_counters[(size_t)CounterType::TransparentColorPass].second.Start(GetCurrentCommandList());
 
-                    RenderModel(m_pParticleModel, false);
+                    RenderModel(m_pParticleModel);
                     for (size_t i = 0; i < m_currentModels.size(); i++)
                     {
                         RenderModel(m_currentModels[i], false);
@@ -3468,6 +3483,16 @@ float Renderer::CalcModelAutoRotate(const Point3f& cameraDir, float deltaSec, Po
     return modelAngle;
 }
 
+void Renderer::RenderModel(const ParticleModel* pModel)
+{
+    const auto& geometries = pModel->geometries;
+
+    for (size_t i = 0; i < geometries.size(); i++)
+    {
+        RenderGeometry(*geometries[i], nullptr, 0, nullptr, {}, &pModel->objData, sizeof(Platform::GLTFObjectData));
+    }
+}
+
 void Renderer::RenderModel(const Platform::GLTFModel* pModel, bool opaque, const RenderPass& pass)
 {
     const auto& geometries = opaque ? pModel->geometries : pModel->blendGeometries;
@@ -4679,9 +4704,9 @@ void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* p
     }
 }
 
-bool Renderer::CreateParticleModel(Platform::GLTFModel** ppModel)
+bool Renderer::CreateParticleModel(ParticleModel** ppModel)
 {
-    Platform::GLTFModel* pNewModel = new Platform::GLTFModel;
+    ParticleModel* pNewModel = new ParticleModel;
 
     struct ParticleVertex
     {
@@ -4690,7 +4715,7 @@ bool Renderer::CreateParticleModel(Platform::GLTFModel** ppModel)
     };
 
     Platform::GLTFGeometry* pGeometry = new Platform::GLTFGeometry();
-    pNewModel->blendGeometries.push_back(pGeometry);
+    pNewModel->geometries.push_back(pGeometry);
     pGeometry->splitData.flags.x = 0; // No shadow (for now)
 
     std::vector<ParticleVertex> vertices(4);

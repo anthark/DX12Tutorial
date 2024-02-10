@@ -158,6 +158,19 @@ private:
     std::pair<Point2f, Point2f> m_splitRects[ShadowSplits];
 };
 
+struct ParticleModel
+{
+    Platform::GLTFObjectData objData;
+
+    std::vector<Platform::GLTFGeometry*> geometries;
+
+    std::vector<Platform::GPUResource> modelTextures;
+
+    std::wstring name;
+
+    void Term(Platform::BaseRenderer* pRenderer);
+};
+
 class Renderer : public Platform::BaseRenderer, public Platform::CameraControlEuler
 {
 public:
@@ -263,6 +276,7 @@ private:
     void SetCurrentModel(Platform::GLTFModel* pModel);
     float CalcModelAutoRotate(const Point3f& cameraDir, float deltaSec, Point3f& newModelDir) const;
 
+    void RenderModel(const ParticleModel* pModel);
     void RenderModel(const Platform::GLTFModel* pModel, bool opaque, const RenderPass& pass = RenderPassColor);
     void RenderModel(const Platform::GLTFModelInstance* pInst, bool opaque, const RenderPass& pass = RenderPassColor);
 
@@ -292,7 +306,7 @@ private:
     float Random(float minVal, float maxVal);
     void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere);
 
-    bool CreateParticleModel(Platform::GLTFModel** ppModel);
+    bool CreateParticleModel(ParticleModel** ppModel);
 
 private:
     std::vector<Platform::GLTFGeometry> m_serviceGeometries;
@@ -392,7 +406,7 @@ private:
 
     std::vector<const Platform::GLTFModelInstance*> m_currentModels;// Current models to be drawn
 
-    Platform::GLTFModel* m_pParticleModel; // TEMP
+    ParticleModel* m_pParticleModel; // TEMP
     Platform::GLTFModel* m_pTerrainModel;
     Platform::GLTFModel* m_pSphereModel;
     Platform::GLTFModelInstance* m_pModelInstance;
