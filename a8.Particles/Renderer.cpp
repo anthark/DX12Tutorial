@@ -305,6 +305,8 @@ Renderer::Renderer(Platform::Device* pDevice)
     , m_lightgridUpdateNeeded(true)
 {
     m_color[0] = m_color[1] = m_color[2] = 1.0f;
+
+    m_sceneTimeSec = 0.0f;
 }
 
 Renderer::~Renderer()
@@ -868,6 +870,8 @@ bool Renderer::Update(double elapsedSec, double deltaSec)
     }
 
     m_lastUpdateDelta = (float)(deltaSec);
+
+    m_sceneTimeSec += (float)(deltaSec) * 60.0f;
 
     Point3f cameraMoveDir = UpdateCamera(deltaSec);
 
@@ -3904,6 +3908,7 @@ void Renderer::PrepareColorPass(const Platform::Camera& camera, const D3D12_RECT
     pCommonCB->cameraProj = camera.CalcProjMatrix(aspectRatioHdivW);
     pCommonCB->cameraPos = camera.CalcPos();
     pCommonCB->sceneParams.x = m_sceneParams.exposure;
+    pCommonCB->sceneTime = m_sceneTimeSec;
     pCommonCB->intSceneParams.x = SceneParameters::RenderModeLighting;
 
     pCommonCB->intSceneParams.y = 0;

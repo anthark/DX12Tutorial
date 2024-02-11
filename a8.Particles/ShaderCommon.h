@@ -40,7 +40,10 @@ CONST_BUFFER(SceneCommon, 0)
     float4x4 cameraProj;
     float4x4 cameraViewNoTrans;
     float4 cameraPos;
-    float4 sceneParams;     // x - exposure
+
+    float3 sceneParams;     // x - exposure
+    float sceneTime;
+
     int4 intSceneParams;    // x - render mode, y - flags, z - shadow mode, w - light culling mode
     float4 imageSize;
     float4 cameraWorldPosNear;  // xyz - camera world pos, w - near

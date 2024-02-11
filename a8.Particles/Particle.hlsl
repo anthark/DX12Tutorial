@@ -2,7 +2,7 @@
 #include "Light.h"
 #include "ShaderCommon.h"
 
-Texture2D DiffuseTexture : register(t32);
+Texture2DArray DiffuseTexture : register(t32);
 SamplerState MinMagMipLinear : register(s0);
 
 struct VSOut
@@ -39,7 +39,7 @@ struct PSOut
 
 PSOut PS(VSOut input)
 {
-    float val = DiffuseTexture.Sample(MinMagMipLinear, input.uv).r;
+    float val = DiffuseTexture.Sample(MinMagMipLinear, float3(input.uv, ((int)sceneTime) % 128)).r;
 
     PSOut psOut;
     psOut.color.xyz = float3(0.925, 0.486, 0.127) * val * 10.0;

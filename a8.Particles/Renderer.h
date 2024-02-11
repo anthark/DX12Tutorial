@@ -377,6 +377,7 @@ private:
     GeometryState m_blitState;
 
     float m_lastUpdateDelta;
+    float m_sceneTimeSec;
 
     // Values for FPS counting
     int m_fpsCount;

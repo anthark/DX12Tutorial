@@ -825,11 +825,21 @@ bool BaseRenderer::CreateGeometryBuffers(const CreateGeometryParams& params, Geo
                 {
                     texDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
                 }
+                UINT count = params.geomStaticTextures[i].pResource->GetDesc().DepthOrArraySize;
                 texDesc.ViewDimension = params.geomStaticTextures[i].dimension;
                 switch (texDesc.ViewDimension)
                 {
                     case D3D12_SRV_DIMENSION_TEXTURE2D:
-                        texDesc.Texture2D.MipLevels = params.geomStaticTextures[i].pResource->GetDesc().MipLevels;
+                        if (count > 1)
+                        {
+                            texDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                            texDesc.Texture2DArray.ArraySize = count;
+                            texDesc.Texture2DArray.MipLevels = params.geomStaticTextures[i].pResource->GetDesc().MipLevels;
+                        }
+                        else
+                        {
+                            texDesc.Texture2D.MipLevels = params.geomStaticTextures[i].pResource->GetDesc().MipLevels;
+                        }
                         break;
 
                     case D3D12_SRV_DIMENSION_TEXTURECUBE:
