@@ -274,6 +274,38 @@ void ParticleModel::Term(Platform::BaseRenderer* pRenderer)
     modelTextures.clear();
 }
 
+bool ParticleModel::Update(double deltaSec)
+{
+    lifeTimeSec += deltaSec;
+
+    objData.frameCount = frameCount;
+    objData.particleFlags = 0;
+    if (modelTextures[1].pResource != nullptr)
+    {
+        objData.particleFlags |= PARTICLE_FLAG_USE_PALETTE;
+    }
+    if (hasAlpha)
+    {
+        objData.particleFlags |= PARTICLE_FLAG_HAS_ALPHA;
+    }
+
+    // Calculate current frame
+    objData.curFrame.x += (float)deltaSec * 60.0f;
+    objData.curFrame.x -= floor(objData.curFrame.x / frameCount) * (float)frameCount;
+
+    return true;
+}
+
+const std::vector<Renderer::CreateParticleParams> Renderer::ParticleSetup = {
+    { _T("../Common/Textures/Flame.png"), Point2i{ 16, 8 }, _T("../Common/Textures/FlamePalette.png"), Point3f{0,0,0}, false, Point2f{0.5f, 1.0f} },
+    {_T("../Common/Textures/test/seq_fin_smoke_c.png"), Point2i{ 16, 8 }, _T(""), Point3f{1,0,0}, false, Point2f{0.5f, 0.5f}},
+    //{_T("../Common/Textures/test/q_expl_seq/part_q_expl_center_seq_01.png"), Point2i{ 15, 8 }, _T(""), Point3f{2,0,0}, true} // Bad size =(
+
+    {_T("../Common/Textures/test/sequence/wispy_smoke01_8x8.png"), Point2i{ 8, 8 }, _T(""), Point3f{2,0,0}, true, Point2f{0.5f, 0.5f}},
+    {_T("../Common/Textures/test/sequence/wispy_smoke03_8x8.png"), Point2i{ 8, 8 }, _T(""), Point3f{3,0,0}, true, Point2f{0.5f, 0.5f}},
+    {_T("../Common/Textures/test/sequence/wispy_smoke04_8x8.png"), Point2i{ 8, 8 }, _T(""), Point3f{4,0,0}, true, Point2f{0.5f, 0.5f}}
+};
+
 Renderer::Renderer(Platform::Device* pDevice)
     : Platform::BaseRenderer(pDevice, 2, 32, { sizeof(SceneCommon), sizeof(Lights) }, 1 + ShadowSplits + 1)
     , CameraControlEuler()
@@ -323,11 +355,11 @@ Renderer::~Renderer()
     assert(m_pModelLoader == nullptr);
     assert(m_pPlayerModelLoader == nullptr);
     assert(m_pTerrainModel == nullptr);
-    assert(m_pParticleModel == nullptr);
     assert(m_pSphereModel == nullptr);
     assert(m_pModelInstance == nullptr);
     assert(m_pFullScreenLight == nullptr);
     assert(m_pPointLight == nullptr);
+    assert(m_particles.empty());
 }
 
 bool Renderer::Init(HWND hWnd)
@@ -479,7 +511,15 @@ bool Renderer::Init(HWND hWnd)
         }
         if (res)
         {
-            res = CreateParticleModel(&m_pParticleModel);
+            for (int i = 0; i < ParticleSetup.size(); i++)
+            {
+                ParticleModel* pModel = nullptr;
+                res = CreateParticleModel(ParticleSetup[i], &pModel);
+                if (res)
+                {
+                    m_particles.push_back(pModel);
+                }
+            }
         }
         if (res)
         {
@@ -778,9 +818,11 @@ void Renderer::Term()
     delete m_pTerrainModel;
     m_pTerrainModel = nullptr;
 
-    m_pParticleModel->Term(this);
-    delete m_pParticleModel;
-    m_pParticleModel = nullptr;
+    for (int i = 0; i < m_particles.size(); i++)
+    {
+        m_particles[i]->Term(this);
+    }
+    m_particles.clear();
 
     m_pSphereModel->Term(this);
     delete m_pSphereModel;
@@ -869,9 +911,15 @@ bool Renderer::Update(double elapsedSec, double deltaSec)
         m_sceneParams.lights[i].intensity = m_sceneParams.lightAnims[i - 1].amplitude * 0.66f + m_sceneParams.lightAnims[i - 1].amplitude * 0.33f * sinf((float)elapsed);
     }
 
+    // Update particles
+    for (int i = 0; i < m_particles.size(); i++)
+    {
+        m_particles[i]->Update(deltaSec);
+    }
+
     m_lastUpdateDelta = (float)(deltaSec);
 
-    m_sceneTimeSec += (float)(deltaSec) * 60.0f;
+    m_sceneTimeSec += (float)(deltaSec);
 
     Point3f cameraMoveDir = UpdateCamera(deltaSec);
 
@@ -1217,7 +1265,10 @@ bool Renderer::Render()
 
                     m_counters[(size_t)CounterType::TransparentColorPass].second.Start(GetCurrentCommandList());
 
-                    RenderModel(m_pParticleModel);
+                    for (int i = 0; i < m_particles.size(); i++)
+                    {
+                        RenderModel(m_particles[i]);
+                    }
                     for (size_t i = 0; i < m_currentModels.size(); i++)
                     {
                         RenderModel(m_currentModels[i], false);
@@ -3493,7 +3544,7 @@ void Renderer::RenderModel(const ParticleModel* pModel)
 
     for (size_t i = 0; i < geometries.size(); i++)
     {
-        RenderGeometry(*geometries[i], nullptr, 0, nullptr, {}, &pModel->objData, sizeof(Platform::GLTFObjectData));
+        RenderGeometry(*geometries[i], nullptr, 0, nullptr, {}, &pModel->objData, sizeof(ParticleData));
     }
 }
 
@@ -4709,9 +4760,13 @@ void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* p
     }
 }
 
-bool Renderer::CreateParticleModel(ParticleModel** ppModel)
+bool Renderer::CreateParticleModel(const CreateParticleParams& particleParams, ParticleModel** ppModel)
 {
     ParticleModel* pNewModel = new ParticleModel;
+
+    pNewModel->objData.particleWorldPos = Point4f(particleParams.pos, 1.0f);
+    pNewModel->frameCount = particleParams.grid.x * particleParams.grid.y;
+    pNewModel->hasAlpha = particleParams.hasAlpha;
 
     struct ParticleVertex
     {
@@ -4726,10 +4781,13 @@ bool Renderer::CreateParticleModel(ParticleModel** ppModel)
     std::vector<ParticleVertex> vertices(4);
     std::vector<UINT16> indices(6);
 
-    vertices[0].pos = Point3f{ -0.25f, 0, 0 };
-    vertices[1].pos = Point3f{ 0.25f, 0, 0 };
-    vertices[2].pos = Point3f{ 0.25f, 1, 0 };
-    vertices[3].pos = Point3f{ -0.25f, 1, 0 };
+    float w = particleParams.size.x;
+    float h = particleParams.size.y;
+
+    vertices[0].pos = Point3f{ -w/2, 0, 0 };
+    vertices[1].pos = Point3f{ w/2, 0, 0 };
+    vertices[2].pos = Point3f{ w/2, h, 0 };
+    vertices[3].pos = Point3f{ -w/2, h, 0 };
 
     vertices[0].uv = Point2f{ 0, 1 };
     vertices[1].uv = Point2f{ 1, 1 };
@@ -4771,11 +4829,11 @@ bool Renderer::CreateParticleModel(ParticleModel** ppModel)
     params.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
     Platform::GPUResource texture;
-    Platform::GPUResource paletteTexture;
-    bool res = Platform::CreateTextureArrayFromFile(_T("../Common/Textures/Flame.png"), Point2i{16, 8}, GetDevice(), GetCurrentUploadCommandList(), texture);
-    if (res)
+    Platform::GPUResource paletteTexture = {0};
+    bool res = Platform::CreateTextureArrayFromFile(particleParams.srcFilename.c_str(), particleParams.grid, GetDevice(), GetCurrentUploadCommandList(), texture);
+    if (res && !particleParams.srcPaletteFilename.empty())
     {
-        res = Platform::CreateTextureFromFile(_T("../Common/Textures/FlamePalette.png"), GetDevice(), paletteTexture, true);
+        res = Platform::CreateTextureFromFile(particleParams.srcPaletteFilename.c_str(), GetDevice(), paletteTexture, true);
     }
     if (res)
     {

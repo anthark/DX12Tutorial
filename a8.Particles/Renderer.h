@@ -13,6 +13,9 @@
 #include "LightGeometry.h"
 #include "CubemapTestGeom.h"
 
+#include "..\..\Common\Shaders\GLTFObjectData.h"
+#include "ParticleData.h"
+
 #include <queue>
 
 namespace tinygltf
@@ -158,9 +161,12 @@ private:
     std::pair<Point2f, Point2f> m_splitRects[ShadowSplits];
 };
 
+struct ParticleData
+PARTICLE_DATA
+
 struct ParticleModel
 {
-    Platform::GLTFObjectData objData;
+    ParticleData objData;
 
     std::vector<Platform::GLTFGeometry*> geometries;
 
@@ -168,11 +174,20 @@ struct ParticleModel
 
     std::wstring name;
 
+    double lifeTimeSec = 0.0;
+    int frameCount = 0;
+    bool hasAlpha = false;
+
     void Term(Platform::BaseRenderer* pRenderer);
+    bool Update(double deltaSec);
 };
 
 class Renderer : public Platform::BaseRenderer, public Platform::CameraControlEuler
 {
+    struct CreateParticleParams;
+
+    static const std::vector<CreateParticleParams> ParticleSetup;
+
 public:
     Renderer(Platform::Device* pDevice);
     virtual ~Renderer();
@@ -213,6 +228,16 @@ private:
         virtual const void* GetObjCB(size_t& size) const override { size = sizeof(objData); return &objData; }
 
         LightGeometryData objData;
+    };
+
+    struct CreateParticleParams
+    {
+        std::wstring srcFilename;
+        Point2i grid;
+        std::wstring srcPaletteFilename;
+        Point3f pos;
+        bool hasAlpha;
+        Point2f size;
     };
 
 private:
@@ -306,7 +331,7 @@ private:
     float Random(float minVal, float maxVal);
     void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere);
 
-    bool CreateParticleModel(ParticleModel** ppModel);
+    bool CreateParticleModel(const CreateParticleParams& particleParams, ParticleModel** ppModel);
 
 private:
     std::vector<Platform::GLTFGeometry> m_serviceGeometries;
@@ -407,7 +432,7 @@ private:
 
     std::vector<const Platform::GLTFModelInstance*> m_currentModels;// Current models to be drawn
 
-    ParticleModel* m_pParticleModel; // TEMP
+    std::vector<ParticleModel*> m_particles;
     Platform::GLTFModel* m_pTerrainModel;
     Platform::GLTFModel* m_pSphereModel;
     Platform::GLTFModelInstance* m_pModelInstance;

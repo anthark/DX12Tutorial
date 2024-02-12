@@ -1,4 +1,4 @@
-#include "Object.h"
+#include "Particle.h"
 #include "Light.h"
 #include "ShaderCommon.h"
 
@@ -20,7 +20,7 @@ VSOut VS(float3 pos : POSITION, float2 uv : TEXCOORD)
 
     float4x4 _transform = transform;
 
-    float3 basePos = transform._m03_m13_m23;
+    float3 basePos = particleWorldPos.xyz;
     float3 xAxis = inverseView._m00_m10_m20;
     float3 yAxis = float3(0,1,0);
 
@@ -40,15 +40,36 @@ struct PSOut
     float4 emissive : SV_TARGET1;
 };
 
+float4 SampleDiffuse(in float2 uv)
+{
+    float ratio = frac(curFrame.x);
+    int idx = (int)(curFrame.x - ratio);
+
+    return DiffuseTexture.Sample(MinMagMipLinear, float3(uv, idx)) * (1.0 - ratio)
+        + DiffuseTexture.Sample(MinMagMipLinear, float3(uv, (idx + 1) % frameCount)) * ratio;
+}
+
 PSOut PS(VSOut input)
 {
-    float val = DiffuseTexture.Sample(MinMagMipLinear, float3(input.uv, ((int)sceneTime) % 128)).r;
-
-    float3 color = PaletteTexture.Sample(MinMagLinearMipPointBorder, val);
+    float4 color = SampleDiffuse(input.uv);
+    if ((particleFlags & PARTICLE_FLAG_USE_PALETTE) != 0)
+    {
+        color.w = color.r;
+        float val = color.r;
+        color.xyz = PaletteTexture.Sample(MinMagLinearMipPointBorder, val).xyz;
+    }
+    else
+    {
+        if ((particleFlags & PARTICLE_FLAG_HAS_ALPHA) == 0)
+        {
+            float lum = 0.2126*color.r + 0.7152*color.g + 0.0722*color.b;
+            color.w = lum;
+        }
+    }
 
     PSOut psOut;
-    psOut.color.xyz = color * val * 10.0;
-    psOut.color.w = val;
+    psOut.color.xyz = color * 10.0;
+    psOut.color.w = color.w;
     psOut.emissive = float4(0,0,0,0);
 
     return psOut;

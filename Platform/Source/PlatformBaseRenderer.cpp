@@ -818,17 +818,19 @@ bool BaseRenderer::CreateGeometryBuffers(const CreateGeometryParams& params, Geo
 
             for (int i = 0; i < params.geomStaticTextures.size(); i++)
             {
-                D3D12_SHADER_RESOURCE_VIEW_DESC texDesc = {};
-                texDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                texDesc.Format = params.geomStaticTextures[i].pResource->GetDesc().Format;
-                if (texDesc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+                if (params.geomStaticTextures[i].pResource != nullptr)
                 {
-                    texDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-                }
-                UINT count = params.geomStaticTextures[i].pResource->GetDesc().DepthOrArraySize;
-                texDesc.ViewDimension = params.geomStaticTextures[i].dimension;
-                switch (texDesc.ViewDimension)
-                {
+                    D3D12_SHADER_RESOURCE_VIEW_DESC texDesc = {};
+                    texDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                    texDesc.Format = params.geomStaticTextures[i].pResource->GetDesc().Format;
+                    if (texDesc.Format == DXGI_FORMAT_D24_UNORM_S8_UINT)
+                    {
+                        texDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+                    }
+                    UINT count = params.geomStaticTextures[i].pResource->GetDesc().DepthOrArraySize;
+                    texDesc.ViewDimension = params.geomStaticTextures[i].dimension;
+                    switch (texDesc.ViewDimension)
+                    {
                     case D3D12_SRV_DIMENSION_TEXTURE1D:
                         texDesc.Texture1D.MipLevels = params.geomStaticTextures[i].pResource->GetDesc().MipLevels;
                         break;
@@ -853,8 +855,9 @@ bool BaseRenderer::CreateGeometryBuffers(const CreateGeometryParams& params, Geo
                     default:
                         assert(!"Unknown SRV type");
                         break;
+                    }
+                    GetDevice()->GetDXDevice()->CreateShaderResourceView(params.geomStaticTextures[i].pResource, &texDesc, cpuTextureHandle);
                 }
-                GetDevice()->GetDXDevice()->CreateShaderResourceView(params.geomStaticTextures[i].pResource, &texDesc, cpuTextureHandle);
 
                 cpuTextureHandle.ptr += GetDevice()->GetDXDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             }
