@@ -3,7 +3,10 @@
 #include "ShaderCommon.h"
 
 Texture2DArray DiffuseTexture : register(t32);
+Texture1D PaletteTexture : register(t33);
+
 SamplerState MinMagMipLinear : register(s0);
+SamplerState MinMagLinearMipPointBorder : register(s2);
 
 struct VSOut
 {
@@ -41,8 +44,10 @@ PSOut PS(VSOut input)
 {
     float val = DiffuseTexture.Sample(MinMagMipLinear, float3(input.uv, ((int)sceneTime) % 128)).r;
 
+    float3 color = PaletteTexture.Sample(MinMagLinearMipPointBorder, val);
+
     PSOut psOut;
-    psOut.color.xyz = float3(0.925, 0.486, 0.127) * val * 10.0;
+    psOut.color.xyz = color * val * 10.0;
     psOut.color.w = val;
     psOut.emissive = float4(0,0,0,0);
 

@@ -699,7 +699,7 @@ HRESULT Device::UpdateBuffer(ID3D12GraphicsCommandList* pCommandList, ID3D12Reso
 HRESULT Device::UpdateTexture(ID3D12GraphicsCommandList* pCommandList, ID3D12Resource* pTexture, const void* pData, size_t dataSize, UINT startingSubresource)
 {
     D3D12_RESOURCE_DESC desc = pTexture->GetDesc();
-    assert(desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D);
+    assert(desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE2D || desc.Dimension == D3D12_RESOURCE_DIMENSION_TEXTURE1D);
 
     UINT64 total = 0;
     std::vector<UINT> numRows(desc.MipLevels);
@@ -824,6 +824,7 @@ bool Device::CreateGPUResource(const D3D12_RESOURCE_DESC& desc, D3D12_RESOURCE_S
                 D3D_CHECK(UpdateBuffer(m_pCurrentUploadCmdList, resource.pResource, pInitialData, initialDataSize));
                 break;
 
+            case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
             case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
                 D3D_CHECK(UpdateTexture(m_pCurrentUploadCmdList, resource.pResource, pInitialData, initialDataSize));
                 break;

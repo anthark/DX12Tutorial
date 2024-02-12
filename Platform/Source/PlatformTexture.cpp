@@ -16,7 +16,10 @@ size_t CalculateSizeWithMips(UINT32 width, UINT32 height, size_t stride, UINT32 
     _BitScanForward(&mips, std::min(NearestPowerOf2(height), NearestPowerOf2(width)));
 
     mipCount = (UINT)mips + 1;
-    mipCount -= 2; // Skip last two mips, as texture cannot be less than 4x4 pixels
+    if (mipCount > 2)
+    {
+        mipCount -= 2; // Skip last two mips, as texture cannot be less than 4x4 pixels
+    }
 
     size_t res = 0;
     for (UINT i = 0; i < mipCount; i++)
@@ -147,7 +150,15 @@ bool CreateTextureFromFile(LPCTSTR filename, Device* pDevice, Platform::GPUResou
 
             GenerateMips(pBuffer, image, mips - 1);
 
-            bool res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Tex2D(srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM, image.width, image.height, 1, mips), D3D12_RESOURCE_STATE_COMMON, nullptr, textureResource, pBuffer, dataSize);
+            bool res = false;
+            if (image.height == 1)
+            {
+                res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Tex1D(srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM, image.width, 1, mips), D3D12_RESOURCE_STATE_COMMON, nullptr, textureResource, pBuffer, dataSize);
+            }
+            else
+            {
+                res = pDevice->CreateGPUResource(CD3DX12_RESOURCE_DESC::Tex2D(srgb ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM, image.width, image.height, 1, mips), D3D12_RESOURCE_STATE_COMMON, nullptr, textureResource, pBuffer, dataSize);
+            }
 
             delete[] pBuffer;
             pBuffer = nullptr;
@@ -226,6 +237,86 @@ bool CreateTextureArrayFromFile(LPCTSTR filename, const Point2i& grid, Device* p
     }
 
     return false;
+}
+
+void CalcHistogram(LPCTSTR filename)
+{
+    UINT count[256] = {0};
+    Point3f color[256] = {0};
+
+    std::vector<char> data;
+    if (Platform::ReadFileContent(filename, data))
+    {
+        png_image image;
+        memset(&image, 0, sizeof(png_image));
+        image.version = PNG_IMAGE_VERSION;
+
+        int pngRes = png_image_begin_read_from_memory(&image, &data[0], data.size());
+        assert(pngRes != 0);
+
+        if (pngRes != 0)
+        {
+            UINT pitch = PNG_IMAGE_ROW_STRIDE(image);
+            UINT pixelSize = PNG_IMAGE_PIXEL_SIZE(image.format);
+
+            size_t dataSize = image.height * pitch;
+
+            UINT8* pBuffer = new UINT8[dataSize];
+
+            pngRes = png_image_finish_read(&image, NULL, pBuffer, 0, NULL);
+
+            if (pngRes != 0)
+            {
+                const UINT8* pPixel = nullptr;
+                for (UINT j = 0; j < image.height; j++)
+                {
+                    for (UINT i = 0; i < image.width; i++)
+                    {
+                        pPixel = ((const UINT8*)pBuffer) + pitch * j + i * pixelSize;
+                        float luminance = 0.2126f*pPixel[0] + 0.7152f*pPixel[1] + 0.0722f*pPixel[2];
+
+                        UINT8 byteLum = (UINT8)luminance;
+
+                        ++count[byteLum];
+                        color[byteLum] = color[byteLum] + Point3f{(float)pPixel[0], (float)pPixel[1], (float)pPixel[2]} * (1.0f/255.0f);
+                    }
+                }
+
+                for (int i = 0; i <= 255; i++)
+                {
+                    if (count[i] > 0)
+                    {
+                        color[i] = color[i] * (1.0f / count[i]);
+                    }
+                }
+            }
+
+            {
+                png_image dstImage;
+                memset(&dstImage, 0, sizeof(dstImage));
+                dstImage.version = PNG_IMAGE_VERSION;
+                dstImage.width = 256;
+                dstImage.height = 1;
+                dstImage.format = PNG_FORMAT_RGBA;
+
+                UINT8* pDstBuffer = new UINT8[1024];
+                for (int i = 0; i < 256; i++)
+                {
+                    pDstBuffer[i * 4 + 0] = (UINT8)(color[i].x * 255);
+                    pDstBuffer[i * 4 + 1] = (UINT8)(color[i].y * 255);
+                    pDstBuffer[i * 4 + 2] = (UINT8)(color[i].z * 255);
+                    pDstBuffer[i * 4 + 3] = 255;
+                }
+
+                pngRes = png_image_write_to_file(&dstImage, "palette.png", 0, pDstBuffer, 256 * 4, nullptr);
+
+                delete[] pDstBuffer;
+            }
+
+            delete[] pBuffer;
+            pBuffer = nullptr;
+        }
+    }
 }
 
 } // Platform

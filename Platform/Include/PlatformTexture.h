@@ -28,4 +28,6 @@ PLATFORM_API bool CreateTexture(const CreateTextureParams& params, bool generate
 PLATFORM_API bool CreateTextureFromFile(LPCTSTR filename, Device* pDevice, Platform::GPUResource& textureResource, bool srgb = false);
 PLATFORM_API bool CreateTextureArrayFromFile(LPCTSTR filename, const Point2i& grid, Device* pDevice, ID3D12GraphicsCommandList* pUploadCommandList, Platform::GPUResource& textureResource, bool srgb = false);
 
+PLATFORM_API void CalcHistogram(LPCTSTR filename);
+
 } // Platform

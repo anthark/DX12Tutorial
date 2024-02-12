@@ -4771,17 +4771,24 @@ bool Renderer::CreateParticleModel(ParticleModel** ppModel)
     params.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 
     Platform::GPUResource texture;
+    Platform::GPUResource paletteTexture;
     bool res = Platform::CreateTextureArrayFromFile(_T("../Common/Textures/Flame.png"), Point2i{16, 8}, GetDevice(), GetCurrentUploadCommandList(), texture);
     if (res)
     {
-        params.geomStaticTexturesCount = 1;
+        res = Platform::CreateTextureFromFile(_T("../Common/Textures/FlamePalette.png"), GetDevice(), paletteTexture, true);
+    }
+    if (res)
+    {
+        params.geomStaticTexturesCount = 2;
         params.geomStaticTextures.push_back(texture.pResource);
+        params.geomStaticTextures.push_back({ paletteTexture.pResource, D3D12_SRV_DIMENSION_TEXTURE1D });
 
         res = CreateGeometry(params, *pGeometry);
     }
     if (res)
     {
         pNewModel->modelTextures.push_back(texture);
+        pNewModel->modelTextures.push_back(paletteTexture);
 
         *ppModel = pNewModel;
     }

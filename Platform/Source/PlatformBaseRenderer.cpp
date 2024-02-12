@@ -829,6 +829,10 @@ bool BaseRenderer::CreateGeometryBuffers(const CreateGeometryParams& params, Geo
                 texDesc.ViewDimension = params.geomStaticTextures[i].dimension;
                 switch (texDesc.ViewDimension)
                 {
+                    case D3D12_SRV_DIMENSION_TEXTURE1D:
+                        texDesc.Texture1D.MipLevels = params.geomStaticTextures[i].pResource->GetDesc().MipLevels;
+                        break;
+
                     case D3D12_SRV_DIMENSION_TEXTURE2D:
                         if (count > 1)
                         {
