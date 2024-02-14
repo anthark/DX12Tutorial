@@ -17,6 +17,24 @@ T DivUp(
     return (a + b - 1) / b;
 }
 
+// Clamping function
+template <typename T>
+T Clamp(T x, T low = (T)0, T high = (T)1)
+{
+    return std::min(high, std::max(low, x));
+}
+
+// Smoothing step sigmoid function
+template <typename T>
+T SmoothStep(T edge0, T edge1, T x)
+{
+    // Scale, and clamp x to 0..1 range
+    x = Clamp((x - edge0) / (edge1 - edge0));
+
+    return x * x * ((T)3.0 - (T)2.0 * x);
+}
+
+
 // Linear interpolation
 template<typename T>
 T Lerp(T a, T b, float t)

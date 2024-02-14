@@ -152,6 +152,123 @@ void LightObject::SetSplitRect(UINT splitIdx, const Point2f& bbMin, const Point2
     m_splitRects[splitIdx] = std::make_pair(bbMin, bbMax);
 }
 
+void ParticleEmitterTemplate::Term(Renderer* pRenderer)
+{
+    for (auto geometry : m_geometries)
+    {
+        pRenderer->DestroyGeometry(*geometry);
+    }
+    m_geometries.clear();
+
+    for (auto texture : m_textures)
+    {
+        pRenderer->GetDevice()->ReleaseGPUResource(texture);
+    }
+    m_textures.clear();
+}
+
+bool ParticleEmitterTemplate::Init(Renderer* pRenderer)
+{
+    m_frameCount = m_params.grid.x * m_params.grid.y;
+
+    struct ParticleVertex
+    {
+        Point3f pos;
+        Point2f uv;
+    };
+
+    Platform::GLTFGeometry* pGeometry = new Platform::GLTFGeometry();
+    m_geometries.push_back(pGeometry);
+    pGeometry->splitData.flags.x = 0; // No shadow (for now)
+
+    std::vector<ParticleVertex> vertices(4);
+    std::vector<UINT16> indices(6);
+
+    float w = m_params.size.x;
+    float h = m_params.size.y;
+
+    if (m_params.billType == PARTICLE_BILLBOARD_TYPE_VERT)
+    {
+        vertices[0].pos = Point3f{ -w / 2, 0, 0 };
+        vertices[1].pos = Point3f{ w / 2, 0, 0 };
+        vertices[2].pos = Point3f{ w / 2, h, 0 };
+        vertices[3].pos = Point3f{ -w / 2, h, 0 };
+    }
+    else
+    {
+        vertices[0].pos = Point3f{ -w / 2, -h / 2, 0 };
+        vertices[1].pos = Point3f{ w / 2, -h / 2, 0 };
+        vertices[2].pos = Point3f{ w / 2, h / 2, 0 };
+        vertices[3].pos = Point3f{ -w / 2, h / 2, 0 };
+    }
+
+    vertices[0].uv = Point2f{ 0, 1 };
+    vertices[1].uv = Point2f{ 1, 1 };
+    vertices[2].uv = Point2f{ 1, 0 };
+    vertices[3].uv = Point2f{ 0, 0 };
+
+    indices[0] = 0;
+    indices[1] = 2;
+    indices[2] = 1;
+    indices[3] = 0;
+    indices[4] = 3;
+    indices[5] = 2;
+
+    Platform::BaseRenderer::CreateGeometryParams params;
+
+    params.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0 });
+    params.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 12 });
+
+    params.indexDataSize = (UINT)indices.size() * sizeof(UINT16);
+    params.indexFormat = DXGI_FORMAT_R16_UINT;
+    params.pIndices = indices.data();
+
+    params.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    params.pShaderSourceName = _T("Particle.hlsl");
+    params.pVertices = vertices.data();
+    params.vertexDataSize = (UINT)vertices.size() * sizeof(ParticleVertex);
+    params.vertexDataStride = sizeof(ParticleVertex);
+    params.rtFormat = Renderer::HDRFormat;
+    params.rtFormat2 = Renderer::HDRFormat;
+
+    params.blendState.RenderTarget[0].BlendEnable = TRUE;
+    params.blendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+    params.blendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+    params.blendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+    params.blendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+    params.blendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
+    params.blendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
+
+    params.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+
+    Platform::GPUResource texture;
+    Platform::GPUResource paletteTexture = { 0 };
+    bool res = Platform::CreateTextureArrayFromFile(m_params.srcFilename.c_str(), m_params.grid, pRenderer->GetDevice(), pRenderer->GetCurrentUploadCommandList(), texture);
+    if (res && !m_params.srcPaletteFilename.empty())
+    {
+        res = Platform::CreateTextureFromFile(m_params.srcPaletteFilename.c_str(), pRenderer->GetDevice(), paletteTexture, true);
+    }
+    if (res)
+    {
+        params.geomStaticTexturesCount = 2;
+        params.geomStaticTextures.push_back(texture.pResource);
+        params.geomStaticTextures.push_back({ paletteTexture.pResource, D3D12_SRV_DIMENSION_TEXTURE1D });
+
+        res = pRenderer->CreateGeometry(params, *pGeometry);
+    }
+    if (res)
+    {
+        m_textures.push_back(texture);
+        m_textures.push_back(paletteTexture);
+    }
+    else
+    {
+        Term(pRenderer);
+    }
+
+    return res;
+}
+
 SceneParameters::SceneParameters()
     : exposure(10.0f)
     , showGrid(false)
@@ -199,8 +316,6 @@ SceneParameters::SceneParameters()
     lights[0].intensity = 10.0f;
     lights[0].distance = 5.0f;
     lights[0].inverseDirSphere = Point2f{(float)(1.5 * M_PI), (float)(0.25 * M_PI) };
-
-    srand(12345);
 
     if (PopulateLightGrid)
     {
@@ -259,51 +374,113 @@ const Platform::CubemapBuilder::InitParams& Renderer::CubemapBuilderParams = {
     5       // Roughness mips
 };
 
-void ParticleModel::Term(Platform::BaseRenderer* pRenderer)
+void ParticleEmitter::SetParticlesForEmit(int particlesCount)
 {
-    for (auto geometry : geometries)
-    {
-        pRenderer->DestroyGeometry(*geometry);
-    }
-    geometries.clear();
-
-    for (auto texture : modelTextures)
-    {
-        pRenderer->GetDevice()->ReleaseGPUResource(texture);
-    }
-    modelTextures.clear();
+    m_freqSec = 0.0;
+    m_particlesForEmit = particlesCount;
 }
 
-bool ParticleModel::Update(double deltaSec)
+void ParticleEmitter::SetEmitFreq(double freqSec)
 {
-    lifeTimeSec += deltaSec;
+    m_freqSec = freqSec;
+    m_particlesForEmit = -1;
+}
 
-    objData.frameCount = frameCount;
-    objData.particleFlags = 0;
-    if (modelTextures[1].pResource != nullptr)
+void ParticleEmitter::Update(Renderer* pRenderer, double deltaSec)
+{
+    int newParticles = 0;
+    if (m_particlesForEmit == -1)
     {
-        objData.particleFlags |= PARTICLE_FLAG_USE_PALETTE;
+        newParticles = (int)(floor((m_lifeTimeSec + deltaSec) / m_freqSec) - floor(m_lifeTimeSec / m_freqSec));
     }
-    if (hasAlpha)
+    else
     {
-        objData.particleFlags |= PARTICLE_FLAG_HAS_ALPHA;
+        if (m_particlesForEmit > 0)
+        {
+            newParticles = 1;
+            --m_particlesForEmit;
+        }
     }
+
+    for (int i = 0; i < newParticles; i++)
+    {
+        Particle* pNewParticle = new Particle(this);
+
+        pNewParticle->m_objData.billboardType = m_pTemplate->GetParams().billType;
+        pNewParticle->m_objData.curFrame = 0;
+        pNewParticle->m_objData.frameCount = m_pTemplate->GetFrameCount();
+        pNewParticle->m_objData.particleFlags = 0;
+        if (m_pTemplate->GetUsePalette())
+        {
+            pNewParticle->m_objData.particleFlags |= PARTICLE_FLAG_USE_PALETTE;
+        }
+        if (m_pTemplate->GetParams().hasAlpha)
+        {
+            pNewParticle->m_objData.particleFlags |= PARTICLE_FLAG_HAS_ALPHA;
+        }
+        pNewParticle->m_objData.particleWorldPos = m_params.pos;
+        pNewParticle->m_tint = m_params.tint;
+
+        if (m_params.randomPosDelta)
+        {
+            static const float spread = 0.5f;
+
+            float x = RandFloat(-spread, spread);
+            float z = RandFloat(-spread, spread);
+            pNewParticle->m_posDelta = Point3f{x, 1.0f, z};
+            pNewParticle->m_posDelta.normalize();
+            pNewParticle->m_posDelta = pNewParticle->m_posDelta * 0.1f;
+
+            pNewParticle->m_maxLifeTimeSec = 10.0;
+            pNewParticle->m_lifeMarginSec = 0.75;
+        }
+        else
+        {
+            pNewParticle->m_posDelta = Point3f{ 0,0,0 };
+
+            pNewParticle->m_maxLifeTimeSec = std::numeric_limits<double>::infinity();
+            pNewParticle->m_lifeMarginSec = 0;
+        }
+
+        pRenderer->AddParticle(pNewParticle);
+    }
+
+    m_lifeTimeSec += deltaSec;
+}
+
+void Particle::Update(double deltaSec)
+{
+    if (IsDead())
+    {
+        return;
+    }
+
+    m_lifeTimeSec += deltaSec;
+
+    Point4f tint = m_tint;
+    if (m_lifeTimeSec < m_lifeMarginSec)
+    {
+        tint = Lerp(Point4f{0,0,0,0}, m_tint, (float)SmoothStep(0.0, m_lifeMarginSec, m_lifeTimeSec));
+    }
+    else if (m_lifeTimeSec > m_maxLifeTimeSec - m_lifeMarginSec)
+    {
+        tint = Lerp(m_tint, Point4f{ 0,0,0,0 }, (float)SmoothStep(m_maxLifeTimeSec - m_lifeMarginSec, m_maxLifeTimeSec, m_lifeTimeSec));
+    }
+    m_objData.particleTint = tint;
+
+    // Move particle
+    m_objData.particleWorldPos = m_objData.particleWorldPos + m_posDelta * (float)deltaSec;
 
     // Calculate current frame
-    objData.curFrame.x += (float)deltaSec * 60.0f;
-    objData.curFrame.x -= floor(objData.curFrame.x / frameCount) * (float)frameCount;
-
-    return true;
+    m_objData.curFrame += (float)deltaSec * (float)m_pEmitter->GetTemplate()->GetParams().animSpeed;
+    m_objData.curFrame -= floor(m_objData.curFrame / m_objData.frameCount) * (float)m_objData.frameCount;
 }
 
-const std::vector<Renderer::CreateParticleParams> Renderer::ParticleSetup = {
-    { _T("../Common/Textures/Flame.png"), Point2i{ 16, 8 }, _T("../Common/Textures/FlamePalette.png"), Point3f{0,0,0}, false, Point2f{0.5f, 1.0f} },
-    {_T("../Common/Textures/test/seq_fin_smoke_c.png"), Point2i{ 16, 8 }, _T(""), Point3f{1,0,0}, false, Point2f{0.5f, 0.5f}},
-    //{_T("../Common/Textures/test/q_expl_seq/part_q_expl_center_seq_01.png"), Point2i{ 15, 8 }, _T(""), Point3f{2,0,0}, true} // Bad size =(
-
-    {_T("../Common/Textures/test/sequence/wispy_smoke01_8x8.png"), Point2i{ 8, 8 }, _T(""), Point3f{2,0,0}, true, Point2f{0.5f, 0.5f}},
-    {_T("../Common/Textures/test/sequence/wispy_smoke03_8x8.png"), Point2i{ 8, 8 }, _T(""), Point3f{3,0,0}, true, Point2f{0.5f, 0.5f}},
-    {_T("../Common/Textures/test/sequence/wispy_smoke04_8x8.png"), Point2i{ 8, 8 }, _T(""), Point3f{4,0,0}, true, Point2f{0.5f, 0.5f}}
+const std::vector<ParticleEmitterTemplateParams> Renderer::ParticleEmitterSetup = {
+    {_T("../Common/Textures/Flame.png"), Point2i{ 16, 8 }, Point2f{0.5f, 1.0f}, PARTICLE_BILLBOARD_TYPE_VERT, _T("../Common/Textures/FlamePalette.png")},
+    {_T("../Common/Textures/test/sequence/wispy_smoke01_8x8.png"), Point2i{8,8}, Point2f{0.5f, 0.5f}, PARTICLE_BILLBOARD_TYPE_FULL, _T(""), true, 10.0f},
+    {_T("../Common/Textures/test/sequence/wispy_smoke03_8x8.png"), Point2i{8,8}, Point2f{0.5f, 0.5f}, PARTICLE_BILLBOARD_TYPE_FULL, _T(""), true, 10.0f},
+    {_T("../Common/Textures/test/sequence/wispy_smoke04_8x8.png"), Point2i{8,8}, Point2f{0.5f, 0.5f}, PARTICLE_BILLBOARD_TYPE_FULL, _T(""), true, 10.0f}
 };
 
 Renderer::Renderer(Platform::Device* pDevice)
@@ -339,6 +516,24 @@ Renderer::Renderer(Platform::Device* pDevice)
     m_color[0] = m_color[1] = m_color[2] = 1.0f;
 
     m_sceneTimeSec = 0.0f;
+
+    srand(12345);
+    for (int i = 0; i < SceneParameters::MaxSSAOSamples; i++)
+    {
+        m_ssaoKernelValues[i] = Point4f{
+            RandFloat(-1.0f, 1.0f),
+            RandFloat(-1.0f, 1.0f),
+            RandFloat(-1.0f, 1.0f),
+            RandFloat( 0.0f, 1.0f)
+        };
+    }
+    for (int i = 0; i < SceneParameters::MaxSSAONoiseSize*SceneParameters::MaxSSAONoiseSize; i++)
+    {
+        m_ssaoNosieValues[i] = Point2f{
+            RandFloat(-1.0f, 1.0f),
+            RandFloat(-1.0f, 1.0f)
+        };
+    }
 }
 
 Renderer::~Renderer()
@@ -511,15 +706,15 @@ bool Renderer::Init(HWND hWnd)
         }
         if (res)
         {
-            for (int i = 0; i < ParticleSetup.size(); i++)
+            for (int i = 0; i < ParticleEmitterSetup.size(); i++)
             {
-                ParticleModel* pModel = nullptr;
-                res = CreateParticleModel(ParticleSetup[i], &pModel);
-                if (res)
-                {
-                    m_particles.push_back(pModel);
-                }
+                m_particleEmitterTemplates.push_back(new ParticleEmitterTemplate(ParticleEmitterSetup[i], this));
             }
+            m_particleEmitters.push_back(new ParticleEmitter({ Point3f{0,0,1}, false, Point4f{10.0f, 10.0f, 10.0f, 1.0f} }, m_particleEmitterTemplates[0]));
+            m_particleEmitters.push_back(new ParticleEmitter({ Point3f{0,0.75f,1}, true, Point4f{1,1,1,0.5f} }, m_particleEmitterTemplates[1]));
+
+            m_particleEmitters[0]->SetParticlesForEmit(1);
+            m_particleEmitters[1]->SetEmitFreq(0.33);
         }
         if (res)
         {
@@ -818,11 +1013,25 @@ void Renderer::Term()
     delete m_pTerrainModel;
     m_pTerrainModel = nullptr;
 
+    // Delete particles
     for (int i = 0; i < m_particles.size(); i++)
     {
-        m_particles[i]->Term(this);
+        delete m_particles[i];
     }
     m_particles.clear();
+    // Delete emitters
+    for (int i = 0; i < m_particleEmitters.size(); i++)
+    {
+        delete m_particleEmitters[i];
+    }
+    m_particleEmitters.clear();
+    // Delete emitter templates
+    for (int i = 0; i < m_particleEmitterTemplates.size(); i++)
+    {
+        m_particleEmitterTemplates[i]->Term(this);
+        delete m_particleEmitterTemplates[i];
+    }
+    m_particleEmitterTemplates.clear();
 
     m_pSphereModel->Term(this);
     delete m_pSphereModel;
@@ -903,6 +1112,11 @@ static bool NearestDir(float angleStart, float angleEnd)
 
 bool Renderer::Update(double elapsedSec, double deltaSec)
 {
+    if (deltaSec > 0.16)
+    {
+        deltaSec = 0.16;
+    }
+
     // Update lights
     for (int i = 1; i < m_sceneParams.activeLightCount; i++)
     {
@@ -911,10 +1125,23 @@ bool Renderer::Update(double elapsedSec, double deltaSec)
         m_sceneParams.lights[i].intensity = m_sceneParams.lightAnims[i - 1].amplitude * 0.66f + m_sceneParams.lightAnims[i - 1].amplitude * 0.33f * sinf((float)elapsed);
     }
 
-    // Update particles
-    for (int i = 0; i < m_particles.size(); i++)
+    // Update particle emitters
+    for (int i = 0; i < m_particleEmitters.size(); i++)
     {
-        m_particles[i]->Update(deltaSec);
+        m_particleEmitters[i]->Update(this, deltaSec);
+    }
+    // Update particles
+    for (auto it = m_particles.begin(); it != m_particles.end();)
+    {
+        if ((*it)->IsDead())
+        {
+            it = m_particles.erase(it);
+        }
+        else
+        {
+            (*it)->Update(deltaSec);
+            ++it;
+        }
     }
 
     m_lastUpdateDelta = (float)(deltaSec);
@@ -1267,7 +1494,7 @@ bool Renderer::Render()
 
                     for (int i = 0; i < m_particles.size(); i++)
                     {
-                        RenderModel(m_particles[i]);
+                        RenderParticle(m_particles[i]);
                     }
                     for (size_t i = 0; i < m_currentModels.size(); i++)
                     {
@@ -1408,7 +1635,7 @@ bool Renderer::Render()
                     /*{
                         ImGui::Begin("SSAO");
                         ImGui::SliderFloat("Kernel radius", &m_sceneParams.ssaoKernelRadius, 0.1f, 2.0f);
-                        ImGui::SliderInt("Kernel samples", &m_sceneParams.ssaoSamplesCount, 16, 512);
+                        ImGui::SliderInt("Kernel samples", &m_sceneParams.ssaoSamplesCount, 16, SceneParameters::MaxSSAOSamples);
                         ImGui::ListBox("Mode", (int*)&m_sceneParams.ssaoMode, SSAOModeNames.data(), (int)SSAOModeNames.size());
                         ImGui::Checkbox("Use range", &m_sceneParams.ssaoUseRange);
                         ImGui::End();
@@ -3538,13 +3765,12 @@ float Renderer::CalcModelAutoRotate(const Point3f& cameraDir, float deltaSec, Po
     return modelAngle;
 }
 
-void Renderer::RenderModel(const ParticleModel* pModel)
+void Renderer::RenderParticle(const Particle* pParticle)
 {
-    const auto& geometries = pModel->geometries;
-
+    const auto& geometries = pParticle->GetEmitter()->GetTemplate()->GetGeometries();
     for (size_t i = 0; i < geometries.size(); i++)
     {
-        RenderGeometry(*geometries[i], nullptr, 0, nullptr, {}, &pModel->objData, sizeof(ParticleData));
+        RenderGeometry(*geometries[i], nullptr, 0, nullptr, {}, pParticle->GetData(), sizeof(ParticleData));
     }
 }
 
@@ -4722,19 +4948,17 @@ float Renderer::Random(float minVal, float maxVal)
 
 void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere)
 {
-    srand(12345);
-
     for (int i = 0; i < sampleCount; i++)
     {
         Point4f s(
-            Random(-1.0f, 1.0f),
-            Random(-1.0f, 1.0f),
-            halfSphere ? Random(0.0f, 1.0f) : Random(-1.0f, 1.0f),
+            m_ssaoKernelValues[i].x,
+            m_ssaoKernelValues[i].y,
+            halfSphere ? m_ssaoKernelValues[i].w : m_ssaoKernelValues[i].z,
             0.0f
         );
         s.normalize();
 
-        s = s * Random(0, 1);
+        s = s * m_ssaoKernelValues[i].z;
 
         float scale = float(i) / float(sampleCount);
         scale = Lerp(0.1f, 1.0f, scale * scale);
@@ -4743,15 +4967,13 @@ void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* p
         pSamples[i] = s;
     }
 
-    srand(12345);
-
     for (int j = 0; j < noiseSize; j++)
     {
         for (int i = 0; i < noiseSize; i++)
         {
             Point4f s(
-                Random(-1.0f, 1.0f),
-                Random(-1.0f, 1.0f),
+                m_ssaoNosieValues[i].x,
+                m_ssaoNosieValues[i].y,
                 0.0f, 0.0f
             );
             s.normalize();
@@ -4760,102 +4982,7 @@ void Renderer::GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* p
     }
 }
 
-bool Renderer::CreateParticleModel(const CreateParticleParams& particleParams, ParticleModel** ppModel)
+void Renderer::AddParticle(Particle* pParticle)
 {
-    ParticleModel* pNewModel = new ParticleModel;
-
-    pNewModel->objData.particleWorldPos = Point4f(particleParams.pos, 1.0f);
-    pNewModel->frameCount = particleParams.grid.x * particleParams.grid.y;
-    pNewModel->hasAlpha = particleParams.hasAlpha;
-
-    struct ParticleVertex
-    {
-        Point3f pos;
-        Point2f uv;
-    };
-
-    Platform::GLTFGeometry* pGeometry = new Platform::GLTFGeometry();
-    pNewModel->geometries.push_back(pGeometry);
-    pGeometry->splitData.flags.x = 0; // No shadow (for now)
-
-    std::vector<ParticleVertex> vertices(4);
-    std::vector<UINT16> indices(6);
-
-    float w = particleParams.size.x;
-    float h = particleParams.size.y;
-
-    vertices[0].pos = Point3f{ -w/2, 0, 0 };
-    vertices[1].pos = Point3f{ w/2, 0, 0 };
-    vertices[2].pos = Point3f{ w/2, h, 0 };
-    vertices[3].pos = Point3f{ -w/2, h, 0 };
-
-    vertices[0].uv = Point2f{ 0, 1 };
-    vertices[1].uv = Point2f{ 1, 1 };
-    vertices[2].uv = Point2f{ 1, 0 };
-    vertices[3].uv = Point2f{ 0, 0 };
-
-    indices[0] = 0;
-    indices[1] = 2;
-    indices[2] = 1;
-    indices[3] = 0;
-    indices[4] = 3;
-    indices[5] = 2;
-
-    CreateGeometryParams params;
-
-    params.geomAttributes.push_back({ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0 });
-    params.geomAttributes.push_back({ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 12 });
-
-    params.indexDataSize = (UINT)indices.size() * sizeof(UINT16);
-    params.indexFormat = DXGI_FORMAT_R16_UINT;
-    params.pIndices = indices.data();
-
-    params.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    params.pShaderSourceName = _T("Particle.hlsl");
-    params.pVertices = vertices.data();
-    params.vertexDataSize = (UINT)vertices.size() * sizeof(ParticleVertex);
-    params.vertexDataStride = sizeof(ParticleVertex);
-    params.rtFormat = HDRFormat;
-    params.rtFormat2 = HDRFormat;
-
-    params.blendState.RenderTarget[0].BlendEnable = TRUE;
-    params.blendState.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-    params.blendState.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-    params.blendState.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-    params.blendState.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-    params.blendState.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ONE;
-    params.blendState.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ZERO;
-
-    params.depthStencilState.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-
-    Platform::GPUResource texture;
-    Platform::GPUResource paletteTexture = {0};
-    bool res = Platform::CreateTextureArrayFromFile(particleParams.srcFilename.c_str(), particleParams.grid, GetDevice(), GetCurrentUploadCommandList(), texture);
-    if (res && !particleParams.srcPaletteFilename.empty())
-    {
-        res = Platform::CreateTextureFromFile(particleParams.srcPaletteFilename.c_str(), GetDevice(), paletteTexture, true);
-    }
-    if (res)
-    {
-        params.geomStaticTexturesCount = 2;
-        params.geomStaticTextures.push_back(texture.pResource);
-        params.geomStaticTextures.push_back({ paletteTexture.pResource, D3D12_SRV_DIMENSION_TEXTURE1D });
-
-        res = CreateGeometry(params, *pGeometry);
-    }
-    if (res)
-    {
-        pNewModel->modelTextures.push_back(texture);
-        pNewModel->modelTextures.push_back(paletteTexture);
-
-        *ppModel = pNewModel;
-    }
-    else
-    {
-        pNewModel->Term(this);
-        delete pNewModel;
-        *ppModel = nullptr;
-    }
-
-    return res;
+    m_particles.push_back(pParticle);
 }

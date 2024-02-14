@@ -17,6 +17,7 @@
 #include "ParticleData.h"
 
 #include <queue>
+#include <array>
 
 namespace tinygltf
 {
@@ -38,6 +39,9 @@ struct LightAnim
 
 struct SceneParameters
 {
+    static const int MaxSSAOSamples = 512;
+    static const int MaxSSAONoiseSize = 16;
+
     enum RenderMode
     {
         RenderModeLighting = 0,
@@ -161,32 +165,114 @@ private:
     std::pair<Point2f, Point2f> m_splitRects[ShadowSplits];
 };
 
+class Renderer;
+
+struct ParticleEmitterTemplateParams
+{
+    std::wstring srcFilename;
+    Point2i grid;
+    Point2f size = Point2f{1,1};
+    int billType = PARTICLE_BILLBOARD_TYPE_NONE;
+    std::wstring srcPaletteFilename = L"";
+    bool hasAlpha = false;
+    double animSpeed = 60.0;
+};
+
+class ParticleEmitterTemplate
+{
+public:
+    ParticleEmitterTemplate(const ParticleEmitterTemplateParams& params, Renderer* pRenderer) : m_params(params)
+    {
+        Init(pRenderer);
+    }
+
+    void Term(Renderer* pRenderer);
+
+    inline const ParticleEmitterTemplateParams& GetParams() const { return m_params; }
+    inline int GetFrameCount() const { return m_frameCount; }
+    inline bool GetUsePalette() const { return m_textures[1].pResource != nullptr; }
+    inline const auto& GetGeometries() const { return m_geometries; }
+
+private:
+    bool Init(Renderer* pRenderer);
+
+private:
+    const ParticleEmitterTemplateParams m_params;
+    int m_frameCount;
+
+    std::vector<Platform::GLTFGeometry*> m_geometries;
+    std::vector<Platform::GPUResource> m_textures;
+};
+
+struct ParticleEmitterParams
+{
+    Point3f pos;
+    bool randomPosDelta = false;
+    Point4f tint = Point4f{ 1,1,1,1 };
+};
+
+class ParticleEmitter
+{
+public:
+    ParticleEmitter(const ParticleEmitterParams& params, const ParticleEmitterTemplate* pTemplate)
+        : m_params(params)
+        , m_pTemplate(pTemplate)
+        , m_lifeTimeSec(0.0)
+        , m_particlesForEmit(0)
+        , m_freqSec(0.0)
+    {}
+
+    void SetParticlesForEmit(int particlesCount);
+    void SetEmitFreq(double freqSec);
+
+    void Update(Renderer* pRenderer, double deltaSec);
+
+    inline const ParticleEmitterTemplate* GetTemplate() const { return m_pTemplate; }
+
+private:
+    const ParticleEmitterParams m_params;
+    const ParticleEmitterTemplate* m_pTemplate;
+
+    double m_lifeTimeSec;
+    int m_particlesForEmit;
+    double m_freqSec;
+};
+
 struct ParticleData
 PARTICLE_DATA
 
-struct ParticleModel
+class Particle
 {
-    ParticleData objData;
+    friend class ParticleEmitter;
 
-    std::vector<Platform::GLTFGeometry*> geometries;
+public:
+    Particle(const ParticleEmitter* pEmitter) : m_pEmitter(pEmitter) {}
 
-    std::vector<Platform::GPUResource> modelTextures;
+    void Update(double deltaSec);
+    inline bool IsDead() const { return m_lifeTimeSec > m_maxLifeTimeSec; }
 
-    std::wstring name;
+    inline const ParticleEmitter* GetEmitter() const { return m_pEmitter; }
+    inline const ParticleData* GetData() const { return &m_objData; }
 
-    double lifeTimeSec = 0.0;
-    int frameCount = 0;
-    bool hasAlpha = false;
+private:
+    const ParticleEmitter* m_pEmitter;
 
-    void Term(Platform::BaseRenderer* pRenderer);
-    bool Update(double deltaSec);
+    double m_maxLifeTimeSec;
+    double m_lifeMarginSec;
+
+    Point4f m_tint;
+
+    double m_lifeTimeSec;
+    Point3f m_posDelta;
+    ParticleData m_objData;
 };
 
 class Renderer : public Platform::BaseRenderer, public Platform::CameraControlEuler
 {
-    struct CreateParticleParams;
+    static const std::vector<ParticleEmitterTemplateParams> ParticleEmitterSetup;
 
-    static const std::vector<CreateParticleParams> ParticleSetup;
+public:
+    static const DXGI_FORMAT HDRFormat;
 
 public:
     Renderer(Platform::Device* pDevice);
@@ -202,6 +288,8 @@ public:
     virtual bool OnKeyUp(int virtualKeyCode) override;
 
     virtual bool RenderScene(const Platform::Camera& camera) override;
+
+    void AddParticle(Particle* pParticle);
 
 protected:
     virtual bool Resize(const D3D12_VIEWPORT& viewport, const D3D12_RECT& rect) override;
@@ -230,21 +318,10 @@ private:
         LightGeometryData objData;
     };
 
-    struct CreateParticleParams
-    {
-        std::wstring srcFilename;
-        Point2i grid;
-        std::wstring srcPaletteFilename;
-        Point3f pos;
-        bool hasAlpha;
-        Point2f size;
-    };
-
 private:
     static const Point4f WhiteColor;
     static const Point4f BackColor;
     static const Point4f BlackBackColor;
-    static const DXGI_FORMAT HDRFormat;
     static const UINT BRDFRes = 512;
     static const UINT BlurSteps = 10;
     static const UINT BlurStepsCompute = 3;
@@ -301,7 +378,7 @@ private:
     void SetCurrentModel(Platform::GLTFModel* pModel);
     float CalcModelAutoRotate(const Point3f& cameraDir, float deltaSec, Point3f& newModelDir) const;
 
-    void RenderModel(const ParticleModel* pModel);
+    void RenderParticle(const Particle* pParticle);
     void RenderModel(const Platform::GLTFModel* pModel, bool opaque, const RenderPass& pass = RenderPassColor);
     void RenderModel(const Platform::GLTFModelInstance* pInst, bool opaque, const RenderPass& pass = RenderPassColor);
 
@@ -331,8 +408,6 @@ private:
     float Random(float minVal, float maxVal);
     void GenerateSSAOKernel(Point4f* pSamples, int sampleCount, Point4f* pNoise, int noiseSize, bool halfSphere);
 
-    bool CreateParticleModel(const CreateParticleParams& particleParams, ParticleModel** ppModel);
-
 private:
     std::vector<Platform::GLTFGeometry> m_serviceGeometries;
     std::vector<TestGeometry> m_cubemapTestGeometries;
@@ -346,6 +421,8 @@ private:
     Platform::GPUResource m_ssaoMaskRTBlur;
     D3D12_CPU_DESCRIPTOR_HANDLE m_ssaoMaskRTV;
     D3D12_GPU_DESCRIPTOR_HANDLE m_ssaoMaskSRV;
+    std::array<Point4f, SceneParameters::MaxSSAOSamples> m_ssaoKernelValues;
+    std::array<Point2f, SceneParameters::MaxSSAONoiseSize*SceneParameters::MaxSSAONoiseSize> m_ssaoNosieValues;
 
     Platform::GPUResource m_GBufferAlbedoRT;
     Platform::GPUResource m_GBufferF0RT;
@@ -432,7 +509,6 @@ private:
 
     std::vector<const Platform::GLTFModelInstance*> m_currentModels;// Current models to be drawn
 
-    std::vector<ParticleModel*> m_particles;
     Platform::GLTFModel* m_pTerrainModel;
     Platform::GLTFModel* m_pSphereModel;
     Platform::GLTFModelInstance* m_pModelInstance;
@@ -458,4 +534,8 @@ private:
     ID3D12RootSignature* m_pMinMaxDepthRS;
 
     std::vector<std::pair<std::tstring, Platform::DeviceTimeQuery>> m_counters;
+
+    std::vector<ParticleEmitterTemplate*> m_particleEmitterTemplates;
+    std::vector<ParticleEmitter*> m_particleEmitters;
+    std::vector<Particle*> m_particles;
 };

@@ -105,6 +105,11 @@ struct Point4
         return Point4<T>{x + a.x, y + a.y, z + a.z, w + a.w};
     }
 
+    inline Point4<T> operator-(const Point4<T>& a) const
+    {
+        return Point4<T>{x - a.x, y - a.y, z - a.z, w - a.w};
+    }
+
     inline Point4<T> operator-() const
     {
         return Point4<T>{-x, -y, -z, -w};

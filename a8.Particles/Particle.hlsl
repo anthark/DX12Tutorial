@@ -21,8 +21,17 @@ VSOut VS(float3 pos : POSITION, float2 uv : TEXCOORD)
     float4x4 _transform = transform;
 
     float3 basePos = particleWorldPos.xyz;
-    float3 xAxis = inverseView._m00_m10_m20;
+    float3 xAxis = float3(1,0,0);
     float3 yAxis = float3(0,1,0);
+    if (billboardType == PARTICLE_BILLBOARD_TYPE_VERT)
+    {
+        xAxis = inverseView._m00_m10_m20;
+    }
+    else if (billboardType == PARTICLE_BILLBOARD_TYPE_FULL)
+    {
+        xAxis = inverseView._m00_m10_m20;
+        yAxis = inverseView._m01_m11_m21;
+    }
 
     float4 worldPos = float4(
         basePos + pos.x * xAxis + pos.y * yAxis,
@@ -42,8 +51,8 @@ struct PSOut
 
 float4 SampleDiffuse(in float2 uv)
 {
-    float ratio = frac(curFrame.x);
-    int idx = (int)(curFrame.x - ratio);
+    float ratio = frac(curFrame);
+    int idx = (int)(curFrame - ratio);
 
     return DiffuseTexture.Sample(MinMagMipLinear, float3(uv, idx)) * (1.0 - ratio)
         + DiffuseTexture.Sample(MinMagMipLinear, float3(uv, (idx + 1) % frameCount)) * ratio;
@@ -68,8 +77,8 @@ PSOut PS(VSOut input)
     }
 
     PSOut psOut;
-    psOut.color.xyz = color * 10.0;
-    psOut.color.w = color.w;
+    psOut.color.xyz = color.xyz * particleTint.xyz;
+    psOut.color.w = color.w * particleTint.w;
     psOut.emissive = float4(0,0,0,0);
 
     return psOut;

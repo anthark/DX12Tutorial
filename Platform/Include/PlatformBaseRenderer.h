@@ -121,7 +121,8 @@ public:
     D3D12_CPU_DESCRIPTOR_HANDLE GetDSVStartHandle() const;
     Platform::GPUResource GetDepthBuffer() const { return m_depthBuffer; }
 
-    ID3D12GraphicsCommandList* GetCurrentCommandList() const { return m_pCurrentRenderCommandList; }
+    inline ID3D12GraphicsCommandList* GetCurrentCommandList() const { return m_pCurrentRenderCommandList; }
+    inline ID3D12GraphicsCommandList* GetCurrentUploadCommandList() const { return m_pCurrentUploadCommandList; }
     void SetupGeometryState(const GeometryState& geomState);
     bool CreateGeometryState(const GeometryStateParams& params, GeometryState& geomState);
     void DestroyGeometryState(GeometryState& geomState);
@@ -145,8 +146,6 @@ protected:
     void SetupCurrentCommonBuffer();
 
     inline ShaderCache* GetShaderCache() const { return m_pShaderCache; }
-
-    inline ID3D12GraphicsCommandList* GetCurrentUploadCommandList() const { return m_pCurrentUploadCommandList; }
 
 private:
     bool CreateDepthBuffer();
