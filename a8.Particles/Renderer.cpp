@@ -432,7 +432,7 @@ void ParticleEmitter::Update(Renderer* pRenderer, double deltaSec)
             pNewParticle->m_posDelta = pNewParticle->m_posDelta * 0.1f;
 
             pNewParticle->m_maxLifeTimeSec = 10.0;
-            pNewParticle->m_lifeMarginSec = 0.75;
+            pNewParticle->m_lifeMarginSec = 1.25;
         }
         else
         {
@@ -711,7 +711,7 @@ bool Renderer::Init(HWND hWnd)
                 m_particleEmitterTemplates.push_back(new ParticleEmitterTemplate(ParticleEmitterSetup[i], this));
             }
             m_particleEmitters.push_back(new ParticleEmitter({ Point3f{0,0,1}, false, Point4f{10.0f, 10.0f, 10.0f, 1.0f} }, m_particleEmitterTemplates[0]));
-            m_particleEmitters.push_back(new ParticleEmitter({ Point3f{0,0.75f,1}, true, Point4f{1,1,1,0.5f} }, m_particleEmitterTemplates[1]));
+            m_particleEmitters.push_back(new ParticleEmitter({ Point3f{0,0.5f,1}, true, Point4f{1,1,1,0.4f} }, m_particleEmitterTemplates[1]));
 
             m_particleEmitters[0]->SetParticlesForEmit(1);
             m_particleEmitters[1]->SetEmitFreq(0.33);
