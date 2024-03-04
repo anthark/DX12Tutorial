@@ -374,24 +374,12 @@ const Platform::CubemapBuilder::InitParams& Renderer::CubemapBuilderParams = {
     5       // Roughness mips
 };
 
-void ParticleEmitter::SetParticlesForEmit(int particlesCount)
-{
-    m_freqSec = 0.0;
-    m_particlesForEmit = particlesCount;
-}
-
-void ParticleEmitter::SetEmitFreq(double freqSec)
-{
-    m_freqSec = freqSec;
-    m_particlesForEmit = -1;
-}
-
 void ParticleEmitter::Update(Renderer* pRenderer, double deltaSec)
 {
     int newParticles = 0;
     if (m_particlesForEmit == -1)
     {
-        newParticles = (int)(floor((m_lifeTimeSec + deltaSec) / m_freqSec) - floor(m_lifeTimeSec / m_freqSec));
+        newParticles = (int)(floor((m_lifeTimeSec + deltaSec) / m_params.emitFreqSec) - floor(m_lifeTimeSec / m_params.emitFreqSec));
     }
     else
     {
@@ -404,17 +392,19 @@ void ParticleEmitter::Update(Renderer* pRenderer, double deltaSec)
 
     for (int i = 0; i < newParticles; i++)
     {
-        Particle* pNewParticle = new Particle(this);
+        int templateIdx = (int)RandFloat(0.0, (float)m_templates.size() - 0.0001f);
 
-        pNewParticle->m_objData.billboardType = m_pTemplate->GetParams().billType;
+        Particle* pNewParticle = new Particle(templateIdx, this);
+
+        pNewParticle->m_objData.billboardType = GetTemplate(templateIdx)->GetParams().billType;
         pNewParticle->m_objData.curFrame = 0;
-        pNewParticle->m_objData.frameCount = m_pTemplate->GetFrameCount();
+        pNewParticle->m_objData.frameCount = GetTemplate(templateIdx)->GetFrameCount();
         pNewParticle->m_objData.particleFlags = 0;
-        if (m_pTemplate->GetUsePalette())
+        if (GetTemplate(templateIdx)->GetUsePalette())
         {
             pNewParticle->m_objData.particleFlags |= PARTICLE_FLAG_USE_PALETTE;
         }
-        if (m_pTemplate->GetParams().hasAlpha)
+        if (GetTemplate(templateIdx)->GetParams().hasAlpha)
         {
             pNewParticle->m_objData.particleFlags |= PARTICLE_FLAG_HAS_ALPHA;
         }
@@ -423,24 +413,22 @@ void ParticleEmitter::Update(Renderer* pRenderer, double deltaSec)
 
         if (m_params.randomPosDelta)
         {
-            static const float spread = 0.5f;
+            static const float spread = 0.35f;
 
             float x = RandFloat(-spread, spread);
             float z = RandFloat(-spread, spread);
-            pNewParticle->m_posDelta = Point3f{x, 1.0f, z};
+            pNewParticle->m_posDelta = Point3f{ x, 1.0f, z };
             pNewParticle->m_posDelta.normalize();
-            pNewParticle->m_posDelta = pNewParticle->m_posDelta * 0.1f;
-
-            pNewParticle->m_maxLifeTimeSec = 10.0;
-            pNewParticle->m_lifeMarginSec = 1.25;
+            pNewParticle->m_posDelta = pNewParticle->m_posDelta * 0.075f;
         }
         else
         {
             pNewParticle->m_posDelta = Point3f{ 0,0,0 };
-
-            pNewParticle->m_maxLifeTimeSec = std::numeric_limits<double>::infinity();
-            pNewParticle->m_lifeMarginSec = 0;
         }
+
+        pNewParticle->m_maxLifeTimeSec = Lerp(m_params.lifeTimeSec.x, m_params.lifeTimeSec.y, RandFloat(0.0f, 1.0f));
+        pNewParticle->m_birthMarginSec = Lerp(m_params.birthMargin.x, m_params.birthMargin.y, RandFloat(0.0f, 1.0f));
+        pNewParticle->m_deathMarginSec = Lerp(m_params.deathMargin.x, m_params.deathMargin.y, RandFloat(0.0f, 1.0f));
 
         pRenderer->AddParticle(pNewParticle);
     }
@@ -458,13 +446,13 @@ void Particle::Update(double deltaSec)
     m_lifeTimeSec += deltaSec;
 
     Point4f tint = m_tint;
-    if (m_lifeTimeSec < m_lifeMarginSec)
+    if (m_lifeTimeSec < m_birthMarginSec)
     {
-        tint = Lerp(Point4f{0,0,0,0}, m_tint, (float)SmoothStep(0.0, m_lifeMarginSec, m_lifeTimeSec));
+        tint = Lerp(Point4f{0,0,0,0}, m_tint, (float)SmoothStep(0.0, m_birthMarginSec, m_lifeTimeSec));
     }
-    else if (m_lifeTimeSec > m_maxLifeTimeSec - m_lifeMarginSec)
+    else if (m_lifeTimeSec > m_maxLifeTimeSec - m_deathMarginSec)
     {
-        tint = Lerp(m_tint, Point4f{ 0,0,0,0 }, (float)SmoothStep(m_maxLifeTimeSec - m_lifeMarginSec, m_maxLifeTimeSec, m_lifeTimeSec));
+        tint = Lerp(m_tint, Point4f{ 0,0,0,0 }, (float)SmoothStep(m_maxLifeTimeSec - m_deathMarginSec, m_maxLifeTimeSec, m_lifeTimeSec));
     }
     m_objData.particleTint = tint;
 
@@ -472,15 +460,20 @@ void Particle::Update(double deltaSec)
     m_objData.particleWorldPos = m_objData.particleWorldPos + m_posDelta * (float)deltaSec;
 
     // Calculate current frame
-    m_objData.curFrame += (float)deltaSec * (float)m_pEmitter->GetTemplate()->GetParams().animSpeed;
+    m_objData.curFrame += (float)deltaSec * (float)m_pEmitter->GetTemplate(m_templateIdx)->GetParams().animSpeed;
     m_objData.curFrame -= floor(m_objData.curFrame / m_objData.frameCount) * (float)m_objData.frameCount;
 }
 
-const std::vector<ParticleEmitterTemplateParams> Renderer::ParticleEmitterSetup = {
+const std::vector<ParticleEmitterTemplateParams> Renderer::ParticleEmitterTemplateSetup = {
     {_T("../Common/Textures/Flame.png"), Point2i{ 16, 8 }, Point2f{0.5f, 1.0f}, PARTICLE_BILLBOARD_TYPE_VERT, _T("../Common/Textures/FlamePalette.png")},
     {_T("../Common/Textures/test/sequence/wispy_smoke01_8x8.png"), Point2i{8,8}, Point2f{0.5f, 0.5f}, PARTICLE_BILLBOARD_TYPE_FULL, _T(""), true, 10.0f},
     {_T("../Common/Textures/test/sequence/wispy_smoke03_8x8.png"), Point2i{8,8}, Point2f{0.5f, 0.5f}, PARTICLE_BILLBOARD_TYPE_FULL, _T(""), true, 10.0f},
     {_T("../Common/Textures/test/sequence/wispy_smoke04_8x8.png"), Point2i{8,8}, Point2f{0.5f, 0.5f}, PARTICLE_BILLBOARD_TYPE_FULL, _T(""), true, 10.0f}
+};
+
+const std::vector<ParticleEmitterParams> Renderer::ParticleEmitterSetup = {
+    { Point3f{0,0,1}, false, Point4f{10.0f, 10.0f, 10.0f, 1.0f}, {0}, 1 },
+    { Point3f{0,0.5f,1}, true, Point4f{1,1,1,0.35f}, {1,2,3}, -1, 0.5, Point2d{9.0, 11.0}, Point2d{1.0, 1.5}, Point2d{2.0, 3.0} }
 };
 
 Renderer::Renderer(Platform::Device* pDevice)
@@ -706,15 +699,22 @@ bool Renderer::Init(HWND hWnd)
         }
         if (res)
         {
+            for (int i = 0; i < ParticleEmitterTemplateSetup.size(); i++)
+            {
+                m_particleEmitterTemplates.push_back(new ParticleEmitterTemplate(ParticleEmitterTemplateSetup[i], this));
+            }
             for (int i = 0; i < ParticleEmitterSetup.size(); i++)
             {
-                m_particleEmitterTemplates.push_back(new ParticleEmitterTemplate(ParticleEmitterSetup[i], this));
-            }
-            m_particleEmitters.push_back(new ParticleEmitter({ Point3f{0,0,1}, false, Point4f{10.0f, 10.0f, 10.0f, 1.0f} }, m_particleEmitterTemplates[0]));
-            m_particleEmitters.push_back(new ParticleEmitter({ Point3f{0,0.5f,1}, true, Point4f{1,1,1,0.4f} }, m_particleEmitterTemplates[1]));
+                std::vector<const ParticleEmitterTemplate*> templates;
+                for (int j = 0; j < ParticleEmitterSetup[i].templateIndex.size(); j++)
+                {
+                    templates.push_back(m_particleEmitterTemplates[ParticleEmitterSetup[i].templateIndex[j]]);
+                }
 
-            m_particleEmitters[0]->SetParticlesForEmit(1);
-            m_particleEmitters[1]->SetEmitFreq(0.33);
+                m_particleEmitters.push_back(
+                    new ParticleEmitter(ParticleEmitterSetup[i], templates)
+                );
+            }
         }
         if (res)
         {
@@ -3767,7 +3767,7 @@ float Renderer::CalcModelAutoRotate(const Point3f& cameraDir, float deltaSec, Po
 
 void Renderer::RenderParticle(const Particle* pParticle)
 {
-    const auto& geometries = pParticle->GetEmitter()->GetTemplate()->GetGeometries();
+    const auto& geometries = pParticle->GetEmitter()->GetTemplate(pParticle->GetTemplateIdx())->GetGeometries();
     for (size_t i = 0; i < geometries.size(); i++)
     {
         RenderGeometry(*geometries[i], nullptr, 0, nullptr, {}, pParticle->GetData(), sizeof(ParticleData));

@@ -209,33 +209,35 @@ struct ParticleEmitterParams
     Point3f pos;
     bool randomPosDelta = false;
     Point4f tint = Point4f{ 1,1,1,1 };
+    std::vector<int> templateIndex = {};
+    int particlesForEmit = -1;
+    double emitFreqSec = 0.0;
+    Point2d lifeTimeSec = Point2d{ std::numeric_limits<double>::infinity(), std::numeric_limits<double>::infinity() };
+    Point2d birthMargin = Point2d{ 0,0 };
+    Point2d deathMargin = Point2d{ 0,0 };
 };
 
 class ParticleEmitter
 {
 public:
-    ParticleEmitter(const ParticleEmitterParams& params, const ParticleEmitterTemplate* pTemplate)
+    ParticleEmitter(const ParticleEmitterParams& params, const std::vector<const ParticleEmitterTemplate*>& templates)
         : m_params(params)
-        , m_pTemplate(pTemplate)
+        , m_templates(templates)
         , m_lifeTimeSec(0.0)
-        , m_particlesForEmit(0)
-        , m_freqSec(0.0)
-    {}
-
-    void SetParticlesForEmit(int particlesCount);
-    void SetEmitFreq(double freqSec);
+    {
+        m_particlesForEmit = m_params.particlesForEmit;
+    }
 
     void Update(Renderer* pRenderer, double deltaSec);
 
-    inline const ParticleEmitterTemplate* GetTemplate() const { return m_pTemplate; }
+    inline const ParticleEmitterTemplate* GetTemplate(int i) const { return m_templates[i]; }
 
 private:
     const ParticleEmitterParams m_params;
-    const ParticleEmitterTemplate* m_pTemplate;
+    const std::vector<const ParticleEmitterTemplate*> m_templates;
 
-    double m_lifeTimeSec;
     int m_particlesForEmit;
-    double m_freqSec;
+    double m_lifeTimeSec;
 };
 
 struct ParticleData
@@ -246,19 +248,22 @@ class Particle
     friend class ParticleEmitter;
 
 public:
-    Particle(const ParticleEmitter* pEmitter) : m_pEmitter(pEmitter) {}
+    Particle(const int templateIdx, const ParticleEmitter* pEmitter) : m_templateIdx(templateIdx), m_pEmitter(pEmitter) {}
 
     void Update(double deltaSec);
     inline bool IsDead() const { return m_lifeTimeSec > m_maxLifeTimeSec; }
 
     inline const ParticleEmitter* GetEmitter() const { return m_pEmitter; }
     inline const ParticleData* GetData() const { return &m_objData; }
+    inline const int GetTemplateIdx() const { return m_templateIdx; }
 
 private:
+    const int m_templateIdx;
     const ParticleEmitter* m_pEmitter;
 
     double m_maxLifeTimeSec;
-    double m_lifeMarginSec;
+    double m_birthMarginSec;
+    double m_deathMarginSec;
 
     Point4f m_tint;
 
@@ -269,7 +274,8 @@ private:
 
 class Renderer : public Platform::BaseRenderer, public Platform::CameraControlEuler
 {
-    static const std::vector<ParticleEmitterTemplateParams> ParticleEmitterSetup;
+    static const std::vector<ParticleEmitterTemplateParams> ParticleEmitterTemplateSetup;
+    static const std::vector<ParticleEmitterParams> ParticleEmitterSetup;
 
 public:
     static const DXGI_FORMAT HDRFormat;
