@@ -29,8 +29,13 @@ CONST_BUFFER(SceneCommon, 0)
 {
     float4x4 VP;
     float4 cameraPos;
-    float4 sceneParams;     // x - exposure, y - bloom threshold
-    int4 intSceneParams;    // x - render mode
+
+    float3 sceneParams;     // x - exposure, y - bloom threshold
+    float bloomRatio;       // Bloom intensity ratio
+
+    int3 intSceneParams;    // x - render mode
+    int useSpecAA;          // Use specular anti-aliasing
+
     float4 imageSize;
 
     float4x4 nodeTransform[MAX_NODES];

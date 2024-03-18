@@ -55,6 +55,30 @@ float3 FresnelSchlickRoughnessFunction(float3 F0, float roughness, in float3 v, 
     return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(max(1.0 - max(dot(v, n), 0.0), 0.0), 5.0);
 }
 
+float SpecAAFilterRoughness(in float3 normal, in float3 l, in float3 v, in float roughness)
+{
+    float3 tangent = abs(normal.z) < 0.999 ? float3(0,0,1) : float3(1,0,0);
+    float3 binormal = normalize(cross(normal, tangent));
+    tangent = cross(binormal, normal);
+
+    float3x3 tbn = transpose(float3x3(tangent, binormal, normal));
+
+    float3 lh = normalize(mul(tbn,l) + mul(tbn,v));
+
+    // Compute half-vector derivatives
+    float2 hpp   = lh.xy/lh.z;
+    float2 hppDx = ddx(hpp);
+    float2 hppDy = ddy(hpp);
+
+    // Compute filtering region
+    float2 rectFp = (abs(hppDx) + abs(hppDy));
+    float maxRectFp = max(rectFp.x, rectFp.y);
+
+    float variance = min(maxRectFp * maxRectFp * 2.0, 0.18);
+
+    return sqrt(roughness*roughness + variance); // Beckmann proxy convolution for GGX
+}
+
 float4 CalcPBRColor(in float3 worldPos, in float3 n, in float3 v, in float roughness, in float metalness, in float dielectricF0, in float3 metalF0, in float occlusion)
 {
     float4 color = float4(0,0,0,1);
@@ -75,7 +99,7 @@ float4 CalcPBRColor(in float3 worldPos, in float3 n, in float3 v, in float rough
         {
             case RENDER_MODE_LIGHTING:
                 {
-                    float NDF = NormalDistributionFunction(n, v, l, roughness);
+                    float NDF = NormalDistributionFunction(n, v, l, useSpecAA ? SpecAAFilterRoughness(n,l,v, roughness) : roughness );
                     float G = GeometryFunction(n, v, l, roughness);
                     float3 F = FresnelFunction(dielectricF0, metalF0.xyz, metalness, v, l);
 

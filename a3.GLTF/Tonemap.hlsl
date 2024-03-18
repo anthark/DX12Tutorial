@@ -49,7 +49,7 @@ float4 PS(VSOut input) : SV_TARGET
     float4 color = HDRTexture.Sample(NoMipSampler, input.uv);
     if (applyBloom)
     {
-        color = color + HDRBloom.Sample(NoMipSampler, input.uv);
+        color = color + HDRBloom.Sample(NoMipSampler, input.uv) * bloomRatio;
     }
 
     int renderMode = intSceneParams.x;

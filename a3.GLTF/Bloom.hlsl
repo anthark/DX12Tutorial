@@ -1,6 +1,7 @@
 #include "Tonemap.h"
 
 Texture2D HDRTexture : register(t32);
+Texture2D DepthTexture : register(t33);
 SamplerState NoMipSampler : register(s2);
 
 struct VSOut
@@ -28,6 +29,12 @@ float Luminance(in float3 color)
 
 float4 PS(VSOut input) : SV_TARGET
 {
+    float depth = DepthTexture.Sample(NoMipSampler, input.uv).x;
+    if (depth == 1.0)
+    {
+        return float4(0,0,0,0);
+    }
+
     float bloomThreshold = sceneParams.y;
 
     float4 color = HDRTexture.Sample(NoMipSampler, input.uv);

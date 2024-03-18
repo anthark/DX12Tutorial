@@ -222,6 +222,12 @@ float4 PS(VSOut input) : SV_TARGET
         float3 diffuse    = irradiance * metalF0.xyz;
         float3 ambient    = (kD * diffuse + specular);
 
+        // AAV TEMP Test
+        if (useSpecAA)
+        {
+            color.xyz *= float3(0.5, 0.5, 1.0);
+        }
+
         color.xyz += ambient;
     }
 
