@@ -119,7 +119,7 @@ SceneParameters::SceneParameters()
     : exposure(10.0f)
     , showGrid(false)
     , showCubemap(true)
-    , applyBloom(false)
+    , applyBloom(true)
     , renderMode(RenderModeLighting)
     , cubemapIdx(0)
     , pPrevModel(nullptr)
@@ -139,6 +139,8 @@ SceneParameters::SceneParameters()
     , sphereMetalness(0.631f)
     , showTestCubes(false)
     , animated(true)
+    , bloomRatio(0.44f)
+    , applySpecAA(true)
 {
     showMenu = true;
 
@@ -347,7 +349,7 @@ bool Renderer::Init(HWND hWnd)
             res = GetDevice()->AllocateRenderTargetView(m_hdrRTV, 2);
             if (res)
             {
-                res = GetDevice()->AllocateStaticDescriptors(1, m_hdrSRVCpu, m_hdrSRV);
+                res = GetDevice()->AllocateStaticDescriptors(2, m_hdrSRVCpu, m_hdrSRV);
             }
         }
         if (res)
@@ -421,7 +423,7 @@ bool Renderer::Init(HWND hWnd)
             geomStateParams.primTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
             geomStateParams.pShaderSourceName = _T("Bloom.hlsl");
             geomStateParams.shaderDefines.push_back("DETECT");
-            geomStateParams.geomStaticTexturesCount = 1;
+            geomStateParams.geomStaticTexturesCount = 2;
             geomStateParams.depthStencilState.DepthEnable = FALSE;
             geomStateParams.rtFormat = HDRFormat;
 
@@ -876,7 +878,9 @@ bool Renderer::Render()
                 {
                     GetCurrentCommandList()->OMSetRenderTargets(1, &m_bloomRTV[0], TRUE, nullptr);
 
+                    GetDevice()->TransitResourceState(GetCurrentCommandList(), GetDepthBuffer().pResource, D3D12_RESOURCE_STATE_DEPTH_WRITE, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                     DetectFlares();
+                    GetDevice()->TransitResourceState(GetCurrentCommandList(), GetDepthBuffer().pResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, D3D12_RESOURCE_STATE_DEPTH_WRITE);
 
                     GetDevice()->TransitResourceState(GetCurrentCommandList(), m_bloomRT[0].pResource, D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -1561,6 +1565,18 @@ bool Renderer::CreateHDRTexture()
         texDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         texDesc.Texture2D.MipLevels = 1;
         GetDevice()->GetDXDevice()->CreateShaderResourceView(m_hdrRT.pResource, &texDesc, m_hdrSRVCpu);
+    }
+    if (res)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE depthSRVCpu = m_hdrSRVCpu;
+        depthSRVCpu.ptr += GetDevice()->GetSRVDescSize();
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC texDesc = {};
+        texDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        texDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+        texDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+        texDesc.Texture2D.MipLevels = 1;
+        GetDevice()->GetDXDevice()->CreateShaderResourceView(GetDepthBuffer().pResource, &texDesc, depthSRVCpu);
     }
 
     if (res)
@@ -2714,6 +2730,9 @@ void Renderer::PrepareColorPass(const Platform::Camera& camera, const D3D12_RECT
     pCommonCB->intSceneParams.y |= (m_sceneParams.pcf ? RENDER_FLAG_PCF_ON : 0);
     pCommonCB->intSceneParams.y |= (m_sceneParams.tintSplits ? RENDER_FLAG_TINT_SPLITS : 0);
     pCommonCB->intSceneParams.y |= (m_sceneParams.tintOutArea ? RENDER_FLAG_TINT_OUT_AREA : 0);
+
+    pCommonCB->bloomRatio = m_sceneParams.bloomRatio;
+    pCommonCB->useSpecAA = m_sceneParams.applySpecAA;
 
     pCommonCB->intSceneParams.z = m_sceneParams.shadowMode;
 

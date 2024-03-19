@@ -77,6 +77,8 @@ struct SceneParameters
     };
 
     // Scene setup
+    float bloomRatio;
+    bool applySpecAA;
     float exposure;
     bool showGrid;
     bool showCubemap;

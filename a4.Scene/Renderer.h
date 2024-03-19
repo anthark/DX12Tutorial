@@ -62,9 +62,11 @@ struct SceneParameters
 
     // Scene setup
     float exposure;
+    float bloomRatio;
     bool showGrid;
     bool showCubemap;
     bool applyBloom;
+    bool applySpecAA;
     bool animated;
     RenderMode renderMode;
     int cubemapIdx;

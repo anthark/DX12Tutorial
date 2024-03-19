@@ -37,16 +37,21 @@ CONST_BUFFER(SceneCommon, 0)
 {
     float4x4 VP;
     float4 cameraPos;
-    float4 sceneParams;     // x - exposure
-    int4 intSceneParams;    // x - render mode, y - flags, z - shadow mode, w - light culling mode
+
+    float2 sceneParams;     // x - exposure, y - bloom threshold
+    float bloomRatio;       // Bloom intensity ratio
+    int useSpecAA;          // Use specular anti-aliasing
+
+    int4 intSceneParams;    // x - render mode
+
     float4 imageSize;
     float4 cameraWorldPosNear;  // xyz - camera world pos, w - near
     float4 cameraWorldDirFar;   // xyz - camera world dir, w - far
     float4 shadowSplitDists;    // Shadow split distances
-	float4 localCubemapBasePosSize; // xyz - pos, w - side size
-	int4 localCubemapGrid; // xy - x and y grid size	
-	float4x4 inverseView; // inverse view matrix
-	float4x4 inverseProj; // inverse proj matrix
+    float4 localCubemapBasePosSize; // xyz - pos, w - side size
+    int4 localCubemapGrid; // xy - x and y grid size	
+    float4x4 inverseView; // inverse view matrix
+    float4x4 inverseProj; // inverse proj matrix
 };
 
 #endif // !_SHADERCOMMON_H

@@ -37,8 +37,13 @@ CONST_BUFFER(SceneCommon, 0)
 {
     float4x4 VP;
     float4 cameraPos;
-    float4 sceneParams;     // x - exposure
-    int4 intSceneParams;    // x - render mode, y - flags, z - shadow mode
+
+    float3 sceneParams;         // x - exposure, y - bloom threshold
+    float bloomRatio;           // Bloom intensity ratio
+
+    int3 intSceneParams;        // x - render mode
+    int useSpecAA;              // Use specular anti-aliasing
+
     float4 imageSize;
     float4 cameraWorldPosNear;  // xyz - camera world pos, w - near
     float4 cameraWorldDirFar;   // xyz - camera world dir, w - far

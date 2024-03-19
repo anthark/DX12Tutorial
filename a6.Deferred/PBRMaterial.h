@@ -218,6 +218,30 @@ float3 SampleEnvironment(in float3 worldPos, in float3 n, in float level)
 #endif // !USE_LOCAL_CUBEMAPS
 }
 
+float SpecAAFilterRoughness(in float3 normal, in float3 l, in float3 v, in float roughness)
+{
+    float3 tangent = abs(normal.z) < 0.999 ? float3(0,0,1) : float3(1,0,0);
+    float3 binormal = normalize(cross(normal, tangent));
+    tangent = cross(binormal, normal);
+
+    float3x3 tbn = transpose(float3x3(tangent, binormal, normal));
+
+    float3 lh = normalize(mul(tbn,l) + mul(tbn,v));
+
+    // Compute half-vector derivatives
+    float2 hpp   = lh.xy/lh.z;
+    float2 hppDx = ddx(hpp);
+    float2 hppDy = ddy(hpp);
+
+    // Compute filtering region
+    float2 rectFp = (abs(hppDx) + abs(hppDy));
+    float maxRectFp = max(rectFp.x, rectFp.y);
+
+    float variance = min(maxRectFp * maxRectFp * 2.0, 0.18);
+
+    return sqrt(roughness*roughness + variance); // Beckmann proxy convolution for GGX
+}
+
 float3 CalcPBRLight(in int i, in float3 worldPos, in float3 n, in float3 v, in float roughness, in float dielectricF0, in float3 metalF0, in float metalness)
 {
     LightValue light = CalculateLight(worldPos, i);
@@ -234,7 +258,7 @@ float3 CalcPBRLight(in int i, in float3 worldPos, in float3 n, in float3 v, in f
 
     float3 radiance = light.color * light.attenuation;
     float ndotl = max(dot(n, l), 0.0);
-    float NDF = NormalDistributionFunction(n, v, l, roughness);
+    float NDF = NormalDistributionFunction(n, v, l, useSpecAA ? SpecAAFilterRoughness(n,l,v, roughness) : roughness );
     float G = GeometryFunction(n, v, l, roughness);
     float3 F = FresnelFunction(dielectricF0, metalF0.xyz, metalness, v, l);
 
@@ -327,7 +351,7 @@ float3 CalcPBRLight_KHRSpecGloss(in int i, in float3 worldPos, in float3 n, in f
     float3 radiance = light.color * light.attenuation;
     float ndotl = max(dot(n, l), 0.0);
 
-    float NDF = NormalDistributionFunction(n, v, l, roughness);
+    float NDF = NormalDistributionFunction(n, v, l, useSpecAA ? SpecAAFilterRoughness(n,l,v, roughness) : roughness );
     float G = GeometryFunction(n, v, l, roughness);
     float3 F = FresnelFunction(0, inF0.xyz, 1.0, v, l);
 

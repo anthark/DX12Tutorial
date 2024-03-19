@@ -41,7 +41,11 @@ CONST_BUFFER(SceneCommon, 0)
     float4x4 cameraViewNoTrans;
     float4 cameraPos;
 
-    float3 sceneParams;     // x - exposure
+    float2 sceneParams;     // x - exposure, y - bloom threshold
+    float bloomRatio;       // Bloom intensity ratio
+    int useSpecAA;          // Use specular anti-aliasing
+
+    float3 scenePadding0;
     float sceneTime;
 
     int4 intSceneParams;    // x - render mode, y - flags, z - shadow mode, w - light culling mode
